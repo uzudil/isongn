@@ -270,7 +270,7 @@ func (e *Editor) setShape(x, y, z int, shape *shapes.Shape, skipEdge bool) {
 	}
 
 	if skipEdge {
-		e.app.View.ClearEdge(x, y)
+		e.app.Loader.ClearEdge(x, y)
 	} else {
 		if z == 0 {
 			for xx := -1; xx <= 1; xx++ {
@@ -288,7 +288,7 @@ func (e *Editor) setShape(x, y, z int, shape *shapes.Shape, skipEdge bool) {
 }
 
 func (e *Editor) setEdges(x, y int, shape *shapes.Shape) {
-	e.app.View.ClearEdge(x, y)
+	e.app.Loader.ClearEdge(x, y)
 
 	w := int(shape.Size[0])
 	h := int(shape.Size[1])
@@ -350,7 +350,7 @@ func (e *Editor) setEdges(x, y int, shape *shapes.Shape) {
 	if edgeName != "" && edgeShape.Index != shape.Index {
 		edge := edgeShape.GetEdge(shape.Name, edgeName)
 		if edge != nil {
-			e.app.View.SetEdge(x, y, edge.Index)
+			e.app.Loader.SetEdge(x, y, edge.Index)
 		}
 	}
 }

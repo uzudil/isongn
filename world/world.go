@@ -11,35 +11,29 @@ import (
 	"time"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
+	"github.com/uzudil/isongn/shapes"
 )
 
 const (
 	SECTION_SIZE   = 200
 	SECTION_Z_SIZE = 24
-	VERSION        = 4
+	VERSION        = 5
 	EDITOR_MODE    = 0
 	RUNNER_MODE    = 1
 )
 
-type Point struct {
-	x, y, z int
-}
-
-type Position struct {
-	Shape int
-}
-
-type PositionList struct {
-	Shapes []int
+type SectionPosition struct {
+	Block int
+	Edge  int
+	// extra non blocking shapes: plants, items, etc.
+	Extras []int
+	Under  int
 }
 
 type Section struct {
-	X, Y     int
-	position [SECTION_SIZE][SECTION_SIZE][SECTION_Z_SIZE]Position
-	edges    [SECTION_SIZE][SECTION_SIZE]Position
-	// extra non blocking shapes: plants, items, etc.
-	extras [SECTION_SIZE][SECTION_SIZE][SECTION_Z_SIZE]PositionList
-	data   map[string]interface{}
+	X, Y int
+	Pos  [SECTION_SIZE][SECTION_SIZE][SECTION_Z_SIZE]SectionPosition
+	data map[string]interface{}
 }
 
 type SectionCache struct {
@@ -84,17 +78,17 @@ func (loader *Loader) MoveTo(x, y int) bool {
 
 func (loader *Loader) ClearEdge(x, y int) {
 	section, atomX, atomY, _ := loader.getPosInSection(x, y, 0)
-	section.edges[atomX][atomY].Shape = 0
+	section.Pos[atomX][atomY][0].Edge = 0
 }
 
 func (loader *Loader) SetEdge(x, y int, shapeIndex int) {
 	section, atomX, atomY, _ := loader.getPosInSection(x, y, 0)
-	section.edges[atomX][atomY].Shape = shapeIndex + 1
+	section.Pos[atomX][atomY][0].Edge = shapeIndex + 1
 }
 
 func (loader *Loader) GetEdge(x, y int) (int, bool) {
 	section, atomX, atomY, _ := loader.getPosInSection(x, y, 0)
-	shapeIndex := section.edges[atomX][atomY].Shape
+	shapeIndex := section.Pos[atomX][atomY][0].Edge
 	if shapeIndex == 0 {
 		return 0, false
 	}
@@ -103,23 +97,28 @@ func (loader *Loader) GetEdge(x, y int) (int, bool) {
 
 func (loader *Loader) SetShape(x, y, z int, shapeIndex int) bool {
 	section, atomX, atomY, atomZ := loader.getPosInSection(x, y, z)
-	section.position[atomX][atomY][atomZ].Shape = shapeIndex + 1
+	section.Pos[atomX][atomY][atomZ].Block = shapeIndex + 1
 	return true
 }
 
 func (loader *Loader) EraseShape(x, y, z int) bool {
 	section, atomX, atomY, atomZ := loader.getPosInSection(x, y, z)
-	shapeIndex := section.position[atomX][atomY][atomZ].Shape
+	shapeIndex := section.Pos[atomX][atomY][atomZ].Block
 	if shapeIndex > 0 {
-		section.position[atomX][atomY][atomZ].Shape = 0
+		section.Pos[atomX][atomY][atomZ].Block = 0
 		return true
 	}
 	return false
 }
 
+func (loader *Loader) GetPos(worldX, worldY, worldZ int) *SectionPosition {
+	section, atomX, atomY, atomZ := loader.getPosInSection(worldX, worldY, worldZ)
+	return &section.Pos[atomX][atomY][atomZ]
+}
+
 func (loader *Loader) GetShape(worldX, worldY, worldZ int) (int, bool) {
 	section, atomX, atomY, atomZ := loader.getPosInSection(worldX, worldY, worldZ)
-	shapeIndex := section.position[atomX][atomY][atomZ].Shape
+	shapeIndex := section.Pos[atomX][atomY][atomZ].Block
 	if shapeIndex == 0 {
 		return 0, false
 	}
@@ -128,16 +127,16 @@ func (loader *Loader) GetShape(worldX, worldY, worldZ int) (int, bool) {
 
 func (loader *Loader) AddExtra(x, y, z int, shapeIndex int) bool {
 	section, atomX, atomY, atomZ := loader.getPosInSection(x, y, z)
-	section.extras[atomX][atomY][atomZ].Shapes = append(section.extras[atomX][atomY][atomZ].Shapes, shapeIndex)
+	section.Pos[atomX][atomY][atomZ].Extras = append(section.Pos[atomX][atomY][atomZ].Extras, shapeIndex)
 	return true
 }
 
 func (loader *Loader) EraseExtra(x, y, z, shapeIndex int) bool {
 	section, atomX, atomY, atomZ := loader.getPosInSection(x, y, z)
-	e := section.extras[atomX][atomY][atomZ].Shapes
+	e := section.Pos[atomX][atomY][atomZ].Extras
 	for index, currShapeIndex := range e {
 		if currShapeIndex == shapeIndex {
-			section.extras[atomX][atomY][atomZ].Shapes = append(e[:index], e[index+1:]...)
+			section.Pos[atomX][atomY][atomZ].Extras = append(e[:index], e[index+1:]...)
 			return true
 		}
 	}
@@ -146,13 +145,21 @@ func (loader *Loader) EraseExtra(x, y, z, shapeIndex int) bool {
 
 func (loader *Loader) EraseAllExtras(x, y, z int) bool {
 	section, atomX, atomY, atomZ := loader.getPosInSection(x, y, z)
-	section.extras[atomX][atomY][atomZ].Shapes = []int{}
+	section.Pos[atomX][atomY][atomZ].Extras = []int{}
 	return true
 }
 
 func (loader *Loader) GetExtras(worldX, worldY, worldZ int) []int {
 	section, atomX, atomY, atomZ := loader.getPosInSection(worldX, worldY, worldZ)
-	return section.extras[atomX][atomY][atomZ].Shapes
+	return section.Pos[atomX][atomY][atomZ].Extras
+}
+
+func (loader *Loader) GetExtra(worldX, worldY, worldZ, i int) (int, bool) {
+	section, atomX, atomY, atomZ := loader.getPosInSection(worldX, worldY, worldZ)
+	if i < len(section.Pos[atomX][atomY][atomZ].Extras) {
+		return section.Pos[atomX][atomY][atomZ].Extras[i], true
+	}
+	return 0, false
 }
 
 func (loader *Loader) GetSectionPos() (int, int) {
@@ -277,21 +284,10 @@ func (loader *Loader) load(sx, sy int) (*Section, error) {
 			return nil, err
 		}
 
-		// if version > VERSION... do something
 		dec := gob.NewDecoder(fz)
-		err = dec.Decode(&section.position)
+		err = dec.Decode(&section.Pos)
 		if err != nil {
 			return nil, err
-		}
-		err = dec.Decode(&section.edges)
-		if err != nil {
-			return nil, err
-		}
-		if version[0] >= 4 {
-			err = dec.Decode(&section.extras)
-			if err != nil {
-				return nil, err
-			}
 		}
 		if version[0] >= 3 {
 			var bytes []byte
@@ -309,6 +305,25 @@ func (loader *Loader) load(sx, sy int) (*Section, error) {
 		}
 	}
 	return section, nil
+}
+
+func (section *Section) calculateUnder() {
+	// configure Under[]
+	for x := 0; x < SECTION_SIZE; x++ {
+		for y := 0; y < SECTION_SIZE; y++ {
+			for z := 0; z < SECTION_Z_SIZE-1; z++ {
+				section.Pos[x][y][z].Under = 0
+				for zz := z + 1; zz < SECTION_Z_SIZE; zz++ {
+					// todo: 4x4 grid used below should be in config.json
+					cover := section.Pos[(x/4)*4][(y/4)*4][zz].Block
+					if cover > 0 && shapes.Shapes[cover-1].Group > 0 {
+						section.Pos[x][y][z].Under = cover
+						break
+					}
+				}
+			}
+		}
+	}
 }
 
 func (loader *Loader) save(section *Section) error {
@@ -335,16 +350,13 @@ func (loader *Loader) save(section *Section) error {
 
 	b := []byte{VERSION}
 	fz.Write(b)
+
+	if loader.ioMode == EDITOR_MODE {
+		section.calculateUnder()
+	}
+
 	enc := gob.NewEncoder(fz)
-	err = enc.Encode(section.position)
-	if err != nil {
-		return err
-	}
-	err = enc.Encode(section.edges)
-	if err != nil {
-		return err
-	}
-	err = enc.Encode(section.extras)
+	err = enc.Encode(section.Pos)
 	if err != nil {
 		return err
 	}

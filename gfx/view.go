@@ -45,9 +45,9 @@ type BlockPos struct {
 	model                  mgl32.Mat4
 	x, y, z                int
 	worldX, worldY, worldZ int
-	block                  *Block
+	pos                    *world.SectionPosition
 	box                    BoundingBox
-	extras                 [EXTRA_SIZE]*Block
+	block                  *Block
 	dir                    shapes.Direction
 	animationTimer         float64
 	animationType          int
@@ -185,7 +185,6 @@ func InitView(zoom float64, camera, shear [3]float32, loader *world.Loader) *Vie
 					y:     y,
 					z:     z,
 					model: model,
-					block: nil,
 				}
 
 				if z == 0 {
@@ -201,7 +200,6 @@ func InitView(zoom float64, camera, shear [3]float32, loader *world.Loader) *Vie
 						y:             y,
 						z:             z,
 						model:         edgeModel,
-						block:         nil,
 						animationType: shapes.ANIMATION_MOVE,
 					}
 				}
@@ -214,7 +212,6 @@ func InitView(zoom float64, camera, shear [3]float32, loader *world.Loader) *Vie
 		y:     0,
 		z:     0,
 		model: mgl32.Ident4(),
-		block: nil,
 	}
 
 	return view
@@ -353,35 +350,28 @@ func (view *View) Load() {
 		blockPos := view.blockPos[x][y][z]
 
 		// reset
-		blockPos.block = nil
 		blockPos.ScrollOffset[0] = 0
 		blockPos.ScrollOffset[1] = 0
-		for i := 0; i < EXTRA_SIZE; i++ {
-			blockPos.extras[i] = nil
-		}
-		if z == 0 {
-			edge := view.edges[x][y]
-			edge.block = nil
-		}
 		blockPos.worldX = worldX
 		blockPos.worldY = worldY
 		blockPos.worldZ = worldZ
 
-		shapeIndex, hasShape := view.Loader.GetShape(worldX, worldY, worldZ)
-		if hasShape {
-			view.setShapeInner(worldX, worldY, worldZ, shapeIndex, true)
-		}
-		for i, shapeIndex := range view.Loader.GetExtras(worldX, worldY, worldZ) {
-			if i >= EXTRA_SIZE {
-				break
-			}
-			blockPos.extras[i] = view.blocks[shapeIndex]
-		}
-		if z == 0 {
-			shapeIndex, hasShape = view.Loader.GetEdge(worldX, worldY)
-			view.setEdgeInner(worldX, worldY, shapeIndex, hasShape)
-		}
+		view.setPos(blockPos, view.Loader.GetPos(worldX, worldY, worldZ))
 	})
+}
+
+func (view *View) setPos(blockPos *BlockPos, sectionPos *world.SectionPosition) {
+	blockPos.pos = sectionPos
+	if sectionPos.Block > 0 {
+		block := view.blocks[sectionPos.Block-1]
+		blockPos.model.Set(0, 3, float32(blockPos.x-SIZE/2)+block.shape.Offset[0])
+		blockPos.model.Set(1, 3, float32(blockPos.y-SIZE/2)+block.shape.Offset[1])
+		blockPos.model.Set(2, 3, float32(blockPos.z)+block.shape.Offset[2])
+		blockPos.box.Set(
+			blockPos.x, blockPos.y, blockPos.z,
+			int(block.sizeX), int(block.sizeY), int(block.sizeZ),
+		)
+	}
 }
 
 func (view *View) toWorldPos(viewX, viewY, viewZ int) (int, int, int) {
@@ -390,6 +380,12 @@ func (view *View) toWorldPos(viewX, viewY, viewZ int) (int, int, int) {
 
 func (view *View) isValidViewPos(viewX, viewY, viewZ int) bool {
 	return !(viewX < 0 || viewX >= SIZE || viewY < 0 || viewY >= SIZE || viewZ < 0 || viewZ >= world.SECTION_Z_SIZE)
+}
+
+func (view *View) isVisibleViewPos(viewX, viewY, viewZ int) bool {
+	return viewX >= SIZE/2-DRAW_SIZE && viewX < SIZE/2+DRAW_SIZE &&
+		viewY >= SIZE/2-DRAW_SIZE && viewY < SIZE/2+DRAW_SIZE &&
+		viewZ >= 0
 }
 
 func (view *View) toViewPos(worldX, worldY, worldZ int) (int, int, int, bool) {
@@ -433,7 +429,7 @@ func (view *View) search(viewX, viewY, viewZ int, fx func(*BlockPos) bool) {
 				vz := viewZ - z
 				if view.isValidViewPos(vx, vy, vz) {
 					bp := view.blockPos[vx][vy][vz]
-					if bp.block != nil && fx(bp) {
+					if bp.pos.Block > 0 && fx(bp) {
 						return
 					}
 				}
@@ -460,11 +456,11 @@ func (view *View) GetShape(worldX, worldY, worldZ int) (int, int, int, int, bool
 		return 0, 0, 0, 0, false
 	}
 	b := view.getShapeAt(viewX, viewY, viewZ)
-	if b == nil {
+	if b == nil || b.pos.Block == 0 {
 		return 0, 0, 0, 0, false
 	}
 	originWorldX, originWorldY, originWorldZ := view.toWorldPos(b.x, b.y, b.z)
-	return b.block.shape.Index, originWorldX, originWorldY, originWorldZ, true
+	return b.pos.Block - 1, originWorldX, originWorldY, originWorldZ, true
 }
 
 func (view *View) GetBlocker(toWorldX, toWorldY, toWorldZ int, fromWorldX, fromWorldY, fromWorldZ int) *BlockPos {
@@ -474,8 +470,8 @@ func (view *View) GetBlocker(toWorldX, toWorldY, toWorldZ int, fromWorldX, fromW
 		return nil
 	}
 	src := view.blockPos[viewX][viewY][viewZ]
-	if src.block == nil {
-		print("WARN: View.GetBlocker src position empty\n")
+	if src.pos.Block == 0 {
+		fmt.Printf("WARN: View.GetBlocker src position empty %d,%d,%d\n", viewX, viewY, viewZ)
 		return nil
 	}
 
@@ -497,9 +493,6 @@ func (view *View) getBlockerAt(toViewX, toViewY, toViewZ int, box *BoundingBox, 
 
 	var blocker *BlockPos
 	view.search(toViewX+box.W, toViewY+box.H, toViewZ+box.D, func(bp *BlockPos) bool {
-		// if bp.block.sizeZ > 1 {
-		// 	fmt.Printf("\tshape=%s at=%d,%d\n", bp.block.shape.Name, bp.x, bp.y)
-		// }
 		if bp != src && bp.box.intersect(box) {
 			blocker = bp
 			return true
@@ -546,32 +539,37 @@ func (view *View) MoveShape(worldX, worldY, worldZ, newWorldX, newWorldY int, is
 	}
 
 	// figure out the new Z
-	bp := view.tryMove(newViewX, newViewY, worldZ, worldX, worldY, worldZ, false, isFlying)
+	newPos := view.tryMove(newViewX, newViewY, worldZ, worldX, worldY, worldZ, false, isFlying)
 
 	// move
-	if bp != nil {
+	if newPos != nil {
 		blockPos, shapeIndex := view.EraseShapeExact(worldX, worldY, worldZ)
 		if blockPos != nil {
-			view.SetShape(newWorldX, newWorldY, bp.z, shapeIndex)
+			view.SetShape(newWorldX, newWorldY, newPos.z, shapeIndex)
 		}
-		return bp.z
+		return newPos.z
 	}
 	return -1
 }
 
 func (view *View) SetShape(worldX, worldY, worldZ int, shapeIndex int) *BlockPos {
 	view.Loader.SetShape(worldX, worldY, worldZ, shapeIndex)
-	return view.setShapeInner(worldX, worldY, worldZ, shapeIndex, true)
+	viewX, viewY, viewZ, validPos := view.toViewPos(worldX, worldY, worldZ)
+	if validPos {
+		bp := view.blockPos[viewX][viewY][viewZ]
+		view.setPos(bp, view.Loader.GetPos(worldX, worldY, worldZ))
+		return bp
+	}
+	return nil
 }
 
 func (view *View) EraseShapeExact(worldX, worldY, worldZ int) (*BlockPos, int) {
 	viewX, viewY, viewZ, validPos := view.toViewPos(worldX, worldY, worldZ)
 	if validPos {
-		view.Loader.EraseShape(worldX, worldY, worldZ)
 		blockPos := view.blockPos[viewX][viewY][viewZ]
-		if blockPos.block != nil {
-			shapeIndex := blockPos.block.shape.Index
-			blockPos.block = nil
+		if blockPos.pos.Block > 0 {
+			shapeIndex := blockPos.pos.Block - 1
+			view.Loader.EraseShape(worldX, worldY, worldZ)
 			return blockPos, shapeIndex
 		}
 	}
@@ -581,33 +579,16 @@ func (view *View) EraseShapeExact(worldX, worldY, worldZ int) (*BlockPos, int) {
 func (view *View) EraseShape(worldX, worldY, worldZ int) (*BlockPos, int) {
 	if shapeIndex, ox, oy, oz, hasShape := view.GetShape(worldX, worldY, worldZ); hasShape {
 		view.Loader.EraseShape(ox, oy, oz)
-		return view.setShapeInner(ox, oy, oz, shapeIndex, false), shapeIndex
+		viewX, viewY, viewZ, validPos := view.toViewPos(worldX, worldY, worldZ)
+		if validPos {
+			return view.blockPos[viewX][viewY][viewZ], shapeIndex
+		}
 	}
 
 	// sometimes this is called for a shape (creature) no longer in view
 	// assume the position is its origin and remove it from the sector
 	view.Loader.EraseShape(worldX, worldY, worldZ)
 	return nil, 0
-}
-
-func (view *View) setShapeInner(worldX, worldY, worldZ int, shapeIndex int, hasShape bool) *BlockPos {
-	viewX, viewY, viewZ, validPos := view.toViewPos(worldX, worldY, worldZ)
-	if validPos {
-		blockPos := view.blockPos[viewX][viewY][viewZ]
-		shape := shapes.Shapes[shapeIndex]
-		if hasShape {
-			blockPos.block = view.blocks[shapeIndex]
-			blockPos.model.Set(0, 3, float32(viewX-SIZE/2)+shape.Offset[0])
-			blockPos.model.Set(1, 3, float32(viewY-SIZE/2)+shape.Offset[1])
-			blockPos.model.Set(2, 3, float32(viewZ)+shape.Offset[2])
-			blockPos.box.Set(viewX, viewY, viewZ, int(blockPos.block.sizeX), int(blockPos.block.sizeY), int(blockPos.block.sizeZ))
-		} else {
-			blockPos.block = nil
-		}
-
-		return blockPos
-	}
-	return nil
 }
 
 func (view *View) GetBlockPos(worldX, worldY, worldZ int) *BlockPos {
@@ -632,27 +613,6 @@ func (view *View) SetShapeAnimation(worldX, worldY, worldZ int, animationType in
 		blockPos.dir = dir
 		blockPos.animationType = animationType
 		blockPos.animationSpeed = animationSpeed
-	}
-}
-
-func (view *View) ClearEdge(worldX, worldY int) {
-	view.Loader.ClearEdge(worldX, worldY)
-	view.setEdgeInner(worldX, worldY, 0, false)
-}
-
-func (view *View) SetEdge(worldX, worldY int, shapeIndex int) {
-	view.Loader.SetEdge(worldX, worldY, shapeIndex)
-	view.setEdgeInner(worldX, worldY, shapeIndex, true)
-}
-
-func (view *View) setEdgeInner(worldX, worldY int, shapeIndex int, hasShape bool) {
-	viewX, viewY, _, validPos := view.toViewPos(worldX, worldY, 0)
-	if validPos {
-		if hasShape {
-			view.edges[viewX][viewY].block = view.blocks[shapeIndex]
-		} else {
-			view.edges[viewX][viewY].block = nil
-		}
 	}
 }
 
@@ -694,13 +654,19 @@ func (view *View) Scroll(dx, dy, dz float32) {
 	view.ScrollOffset[2] = dz
 }
 
-func (view *View) isUnderShape(x, y, z int) bool {
-	if view.underShape == nil {
-		return true
-	}
-	wx, wy, _ := view.toWorldPos(x, y, z)
-	if shapeIndex, _, _, _, hasShape := view.GetShape(wx, wy, view.maxZ); hasShape {
-		return shapes.Shapes[shapeIndex].Group == view.underShape.Group
+func (view *View) isVisible(blockPos *BlockPos) bool {
+	if blockPos.pos != nil {
+		// is it below the max Z?
+		zOk := blockPos.z < view.maxZ
+		if view.underShape != nil && zOk {
+			// if it's below the max and undershape is set: only display if under (ie. dungeon)
+			return zOk && blockPos.pos.Under > 0 && shapes.Shapes[blockPos.pos.Under-1].Group == view.underShape.Group
+		}
+		if view.underShape == nil && !zOk {
+			// if above the max and undershape is not set: show mountain tops
+			return blockPos.pos.Block > 0 && shapes.Shapes[blockPos.pos.Block-1].Group > 0
+		}
+		return zOk
 	}
 	return false
 }
@@ -733,39 +699,31 @@ func (view *View) Draw(delta float64) {
 	state.init = false
 	view.traverseForDraw(func(x, y, z int) {
 		blockPos := view.blockPos[x][y][z]
-		underShape := view.isUnderShape(x, y, z)
-		if blockPos.block != nil && z < view.maxZ && underShape {
-			blockPos.Draw(view, -1)
-		}
-		if z < view.maxZ && underShape {
+		if view.isVisible(blockPos) {
+			if blockPos.pos.Block > 0 {
+				blockPos.Draw(view, view.blocks[blockPos.pos.Block-1], -1)
+			}
+
 			modelZ := blockPos.model.At(2, 3)
-			for i := 0; i < EXTRA_SIZE; i++ {
-				if blockPos.extras[i] == nil {
-					break
-				}
+			for i := range blockPos.pos.Extras {
 				// show extras slightly on top of each other
 				blockPos.model.Set(2, 3, modelZ+float32(i)*0.01)
-				blockPos.Draw(view, i)
+				blockPos.Draw(view, view.blocks[blockPos.pos.Extras[i]], i)
+			}
+
+			if blockPos.pos.Edge > 0 {
+				blockPos.model.Set(2, 3, float32(z)+0.01)
+				blockPos.Draw(view, view.blocks[blockPos.pos.Edge-1], -1)
 			}
 			blockPos.model.Set(2, 3, modelZ)
 		}
-		if z == 0 && underShape {
-			edge := view.edges[x][y]
-			if edge.block != nil {
-				edge.Draw(view, -1)
-			}
-		}
 	})
 	if view.Cursor.block != nil {
-		view.Cursor.Draw(view, -1)
+		view.Cursor.Draw(view, view.Cursor.block, -1)
 	}
 }
 
-func (b *BlockPos) Draw(view *View, extraIndex int) {
-	block := b.block
-	if extraIndex > -1 {
-		block = b.extras[extraIndex]
-	}
+func (b *BlockPos) Draw(view *View, block *Block, extraIndex int) {
 	if !state.init || state.texture != block.texture.texture {
 		gl.BindTexture(gl.TEXTURE_2D, block.texture.texture)
 		state.texture = block.texture.texture
@@ -981,7 +939,7 @@ func (view *View) tryMove(newViewX, newViewY, newViewZ, startWorldX, startWorldY
 		}
 		z--
 	}
-	if !isFlying && standingOn != nil && standingOn.block.shape.NoSupport {
+	if !isFlying && standingOn != nil && shapes.Shapes[standingOn.pos.Block-1].NoSupport {
 		return nil
 	}
 	if z < newViewZ {
