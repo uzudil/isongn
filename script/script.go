@@ -342,6 +342,15 @@ func distance(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	return math.Sqrt(dx + dy + dz), nil
 }
 
+func setPathThroughShapes(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	names := arg[0].(*[]interface{})
+	app := ctx.App["app"].(*gfx.App)
+	for _, name := range *names {
+		app.View.AddPathThroughShape(shapes.Shapes[shapes.Names[name.(string)]])
+	}
+	return nil, nil
+}
+
 func findPath(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	sx := int(arg[0].(float64))
 	sy := int(arg[1].(float64))
@@ -537,6 +546,7 @@ func InitScript() {
 	bscript.AddBuiltin("getScreenPos", getScreenPos)
 	bscript.AddBuiltin("distance", distance)
 	bscript.AddBuiltin("findPath", findPath)
+	bscript.AddBuiltin("setPathThroughShapes", setPathThroughShapes)
 	for k, v := range constants {
 		bscript.AddConstant(k, v)
 	}

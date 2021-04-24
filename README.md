@@ -6,6 +6,15 @@
 
 isongn is a cross-platform, open-world, isometric, scriptable rendering engine. We take care of disk io, graphics, sound, collision detection and map abstractions. You provide the assets, event handling scripts and the vision. Realize your old-school rpg/action-game dreams with easy-to-use modern technology!
 
+# Features
+- High speed, isometric rendering
+- Completely configurable rendering engine
+- Simulated low-res, old-school game feel
+- Game control from [script](https://github.com/uzudil/bscript)
+- Near-infinite map size with 
+- Daylight color cycle, weather effects
+- Shader animations for vegeation, etc
+
 ## The tech
 
 For graphics, isongn uses opengl. Instead of sorting isometric shapes [using the cpu](https://shaunlebron.github.io/IsometricBlocks/), isongn actually draws in 3d space and lets the gpu hardware sort the shapes in the z buffer. It's the best of both worlds: old school graphics and the power of modern hardware.

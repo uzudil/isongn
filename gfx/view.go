@@ -74,6 +74,7 @@ type View struct {
 	maxZ                  int
 	underShape            *shapes.Shape
 	daylight              [4]float32
+	context               ViewContext
 }
 
 func getProjection(zoom float32, shear [3]float32) mgl32.Mat4 {
@@ -100,6 +101,7 @@ func InitView(zoom float64, camera, shear [3]float32, loader *world.Loader) *Vie
 		maxZ:     world.SECTION_Z_SIZE,
 		daylight: [4]float32{1, 1, 1, 1},
 	}
+	view.context.pathThroughShapes = map[*shapes.Shape]bool{}
 	view.projection = getProjection(float32(view.zoom), view.shear)
 
 	// coordinate system: Z is up
@@ -379,15 +381,10 @@ func (view *View) GetShape(worldX, worldY, worldZ int) (int, int, int, int, bool
 	return b.pos.Block - 1, originWorldX, originWorldY, originWorldZ, true
 }
 
-func (view *View) GetBlocker(toWorldX, toWorldY, toWorldZ int, fromWorldX, fromWorldY, fromWorldZ int) *BlockPos {
-	viewX, viewY, viewZ, validPos := view.toViewPos(fromWorldX, fromWorldY, fromWorldZ)
-	if !validPos {
-		print("WARN: View.GetBlocker src position invalid\n")
-		return nil
-	}
-	src := view.blockPos[viewX][viewY][viewZ]
+func (view *View) GetBlocker(toWorldX, toWorldY, toWorldZ int) *BlockPos {
+	src := view.context.start
 	if src.pos.Block == 0 {
-		fmt.Printf("WARN: View.GetBlocker src position empty %d,%d,%d\n", viewX, viewY, viewZ)
+		fmt.Printf("WARN: View.GetBlocker src position empty %d,%d,%d\n", src.x, src.y, src.z)
 		return nil
 	}
 
@@ -409,7 +406,11 @@ func (view *View) getBlockerAt(toViewX, toViewY, toViewZ int, box *BoundingBox, 
 
 	var blocker *BlockPos
 	view.search(toViewX+box.W, toViewY+box.H, toViewZ+box.D, func(bp *BlockPos) bool {
-		if bp != src && bp.box.intersect(box) {
+		pathThrough := false
+		if view.context.isPathing {
+			_, pathThrough = view.context.pathThroughShapes[shapes.Shapes[bp.pos.Block-1]]
+		}
+		if !pathThrough && bp != src && bp.box.intersect(box) {
 			blocker = bp
 			return true
 		}
@@ -454,8 +455,16 @@ func (view *View) MoveShape(worldX, worldY, worldZ, newWorldX, newWorldY int, is
 		return -1
 	}
 
+	startViewX, startViewY, startViewZ, validPos := view.toViewPos(worldX, worldY, worldZ)
+	if !validPos {
+		return -1
+	}
+
 	// figure out the new Z
-	newPos := view.tryMove(newViewX, newViewY, worldZ, worldX, worldY, worldZ, false, isFlying)
+	view.context.isPathing = false
+	view.context.isFlying = false
+	view.context.start = view.blockPos[startViewX][startViewY][startViewZ]
+	newPos := view.tryMove(newViewX, newViewY, worldZ)
 
 	// move
 	if newPos != nil {
@@ -468,18 +477,18 @@ func (view *View) MoveShape(worldX, worldY, worldZ, newWorldX, newWorldY int, is
 	return -1
 }
 
-func (view *View) tryMove(newViewX, newViewY, newViewZ, startWorldX, startWorldY, startWorldZ int, cacheFit, isFlying bool) *BlockPos {
+func (view *View) tryMove(newViewX, newViewY, newViewZ int) *BlockPos {
 	// can we drop down here? (check this before the same-z move)
 	z := newViewZ
 	var standingOn *BlockPos
 	for z > 0 {
-		standingOn = view.getBlockerWithCache(view.blockPos[newViewX][newViewY][z-1], startWorldX, startWorldY, startWorldZ, cacheFit)
+		standingOn = view.getBlockerWithCache(view.blockPos[newViewX][newViewY][z-1])
 		if standingOn != nil {
 			break
 		}
 		z--
 	}
-	if !isFlying && standingOn != nil && shapes.Shapes[standingOn.pos.Block-1].NoSupport {
+	if !view.context.isFlying && standingOn != nil && shapes.Shapes[standingOn.pos.Block-1].NoSupport {
 		return nil
 	}
 	if z < newViewZ {
@@ -488,31 +497,27 @@ func (view *View) tryMove(newViewX, newViewY, newViewZ, startWorldX, startWorldY
 
 	// same z move
 	newNode := view.blockPos[newViewX][newViewY][newViewZ]
-	if view.getBlockerWithCache(newNode, startWorldX, startWorldY, startWorldZ, cacheFit) == nil {
+	if view.getBlockerWithCache(newNode) == nil {
 		return newNode
 	}
 
 	// step up?
 	newNode = view.blockPos[newViewX][newViewY][newViewZ+1]
-	if view.getBlockerWithCache(newNode, startWorldX, startWorldY, startWorldZ, cacheFit) == nil {
+	if view.getBlockerWithCache(newNode) == nil {
 		return newNode
 	}
 	return nil
 }
 
-func (view *View) getBlockerWithCache(node *BlockPos, startWorldX, startWorldY, startWorldZ int, cacheFit bool) *BlockPos {
-	if cacheFit {
+func (view *View) getBlockerWithCache(node *BlockPos) *BlockPos {
+	if view.context.isPathing {
 		if !node.pathNode.fitCalled {
 			node.pathNode.fitCalled = true
-			node.pathNode.blocker = view.GetBlocker(
-				node.worldX, node.worldY, node.worldZ,
-				startWorldX, startWorldY, startWorldZ)
+			node.pathNode.blocker = view.GetBlocker(node.worldX, node.worldY, node.worldZ)
 		}
 		return node.pathNode.blocker
 	} else {
-		return view.GetBlocker(
-			node.worldX, node.worldY, node.worldZ,
-			startWorldX, startWorldY, startWorldZ)
+		return view.GetBlocker(node.worldX, node.worldY, node.worldZ)
 	}
 }
 

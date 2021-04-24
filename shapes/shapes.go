@@ -354,7 +354,7 @@ func InitCreatures(gameDir string, data []map[string]interface{}) error {
 					xpos += dim[0]
 				}
 				dir := dirI.(string)
-				fmt.Printf("\t\t\tadding %d steps for: %s\n", a.Steps, dir)
+				//fmt.Printf("\t\t\tadding %d steps for: %s\n", a.Steps, dir)
 				a.Tex[Directions[dir]] = dirFrames
 			}
 			frameName := frame["name"].(string)
@@ -363,7 +363,7 @@ func InitCreatures(gameDir string, data []map[string]interface{}) error {
 				animationIndex = len(AnimationNames)
 				AnimationNames[frameName] = animationIndex
 			}
-			fmt.Printf("\t\tadding animations for: %s\n", frameName)
+			//fmt.Printf("\t\tadding animations for: %s\n", frameName)
 			shape.Animations[animationIndex] = a
 		}
 	}

@@ -1,6 +1,7 @@
 package gfx
 
 import (
+	"github.com/uzudil/isongn/shapes"
 	"github.com/uzudil/isongn/util"
 )
 
@@ -15,13 +16,30 @@ type PathNode struct {
 	parent          *BlockPos
 }
 
+type ViewContext struct {
+	isFlying          bool
+	isPathing         bool
+	pathThroughShapes map[*shapes.Shape]bool
+	start, end        *BlockPos
+}
+
+func (view *View) AddPathThroughShape(shape *shapes.Shape) {
+	view.context.pathThroughShapes[shape] = true
+}
+
 func (view *View) FindPath(sx, sy, sz, ex, ey, ez int, isFlying bool) []PathStep {
+	view.context.isFlying = isFlying
+	view.context.isPathing = true
 	startViewX, startViewY, startViewZ, startOk := view.toViewPos(sx, sy, sz)
 	endViewX, endViewY, endViewZ, endOk := view.toViewPos(ex, ey, ez)
+	var steps []PathStep
 	if startOk && endOk {
-		return view.findPath(startViewX, startViewY, startViewZ, endViewX, endViewY, endViewZ, sx, sy, sz, isFlying)
+		view.context.start = view.blockPos[startViewX][startViewY][startViewZ]
+		view.context.end = view.blockPos[endViewX][endViewY][endViewZ]
+		steps = view.findPath()
 	}
-	return nil
+	view.context.isPathing = false
+	return steps
 }
 
 /**
@@ -37,10 +55,9 @@ func (view *View) FindPath(sx, sy, sz, ex, ey, ez int, isFlying bool) []PathStep
     It has since been replaced with astar.js which uses a Binary Heap and is quite faster, but I am leaving
     it here since it is more strictly following pseudocode for the Astar search
 */
-func (view *View) findPath(startViewX, startViewY, startViewZ, endViewX, endViewY, endViewZ, startWorldX, startWorldY, startWorldZ int, isFlying bool) []PathStep {
+func (view *View) findPath() []PathStep {
 	view.resetPathFind()
-	end := view.blockPos[endViewX][endViewY][endViewZ]
-	openList := []*BlockPos{view.blockPos[startViewX][startViewY][startViewZ]}
+	openList := []*BlockPos{view.context.start}
 	for len(openList) > 0 {
 		// Grab the lowest f(x) to process next
 		lowInd := 0
@@ -53,7 +70,7 @@ func (view *View) findPath(startViewX, startViewY, startViewZ, endViewX, endView
 		currentNode := openList[lowInd]
 
 		// End case -- result has been found, return the traced path
-		if currentNode.x == end.x && currentNode.y == end.y && currentNode.z == end.z {
+		if currentNode == view.context.end {
 			return view.generatePath(currentNode)
 		}
 
@@ -63,7 +80,7 @@ func (view *View) findPath(startViewX, startViewY, startViewZ, endViewX, endView
 
 		// fmt.Printf("Processing: %d,%d,%d. List len=%d\n", currentNode.x, currentNode.y, currentNode.z, len(openList))
 
-		neighbors := view.astarNeighbors(currentNode, startWorldX, startWorldY, startWorldZ, isFlying)
+		neighbors := view.astarNeighbors(currentNode)
 		for _, neighbor := range neighbors {
 			// process only valid nodes
 			if !neighbor.pathNode.closed {
@@ -78,7 +95,7 @@ func (view *View) findPath(startViewX, startViewY, startViewZ, endViewX, endView
 					// This the the first time we have arrived at this node, it must be the best
 					// Also, we need to take the h (heuristic) score since we haven't done so yet
 					gScoreIsBest = true
-					neighbor.pathNode.h = heuristic(neighbor, end)
+					neighbor.pathNode.h = heuristic(neighbor, view.context.end)
 					neighbor.pathNode.visited = true
 					openList = append(openList, neighbor)
 				} else if gScore < neighbor.pathNode.g {
@@ -109,33 +126,33 @@ func heuristic(pos0, pos1 *BlockPos) int {
 	return d1 + d2 + d3
 }
 
-func (view *View) astarNeighbors(node *BlockPos, startWorldX, startWorldY, startWorldZ int, isFlying bool) []*BlockPos {
+func (view *View) astarNeighbors(node *BlockPos) []*BlockPos {
 	ret := []*BlockPos{}
 	if node.x-1 >= 0 {
-		if newNode := view.tryInDir(node, -1, 0, startWorldX, startWorldY, startWorldZ, isFlying); newNode != nil {
+		if newNode := view.tryInDir(node, -1, 0); newNode != nil {
 			ret = append(ret, newNode)
 		}
 	}
 	if node.x+1 < SIZE {
-		if newNode := view.tryInDir(node, 1, 0, startWorldX, startWorldY, startWorldZ, isFlying); newNode != nil {
+		if newNode := view.tryInDir(node, 1, 0); newNode != nil {
 			ret = append(ret, newNode)
 		}
 	}
 	if node.y-1 >= 0 {
-		if newNode := view.tryInDir(node, 0, -1, startWorldX, startWorldY, startWorldZ, isFlying); newNode != nil {
+		if newNode := view.tryInDir(node, 0, -1); newNode != nil {
 			ret = append(ret, newNode)
 		}
 	}
 	if node.y+1 < SIZE {
-		if newNode := view.tryInDir(node, 0, 1, startWorldX, startWorldY, startWorldZ, isFlying); newNode != nil {
+		if newNode := view.tryInDir(node, 0, 1); newNode != nil {
 			ret = append(ret, newNode)
 		}
 	}
 	return ret
 }
 
-func (view *View) tryInDir(node *BlockPos, dx, dy, startWorldX, startWorldY, startWorldZ int, isFlying bool) *BlockPos {
-	return view.tryMove(node.x+dx, node.y+dy, node.z, startWorldX, startWorldY, startWorldZ, true, isFlying)
+func (view *View) tryInDir(node *BlockPos, dx, dy int) *BlockPos {
+	return view.tryMove(node.x+dx, node.y+dy, node.z)
 }
 
 func (view *View) generatePath(currentNode *BlockPos) []PathStep {
