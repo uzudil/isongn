@@ -2,21 +2,20 @@ package gfx
 
 import (
 	"fmt"
-	"image"
-	"image/draw"
 	"math"
 
 	"github.com/go-gl/gl/all-core/gl"
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/uzudil/isongn/shapes"
-	"github.com/uzudil/isongn/util"
 	"github.com/uzudil/isongn/world"
 )
 
-type Texture struct {
-	texture      uint32
-	textureIndex int32
-}
+const (
+	viewSize    = 10
+	SIZE        = 96
+	DRAW_SIZE   = 48
+	SEARCH_SIZE = 16
+)
 
 // Block is a displayed Shape
 type Block struct {
@@ -25,19 +24,6 @@ type Block struct {
 	shape               *shapes.Shape
 	texture             *Texture
 	index               int32
-}
-
-const EXTRA_SIZE = 8
-
-var ZERO_OFFSET [2]float32
-
-type PathNode struct {
-	f, g, h         int
-	visited, closed bool
-	fitCalled       bool
-	blocker         *BlockPos
-	debug           string
-	parent          *BlockPos
 }
 
 // BlockPos is a displayed Shape at a location
@@ -78,11 +64,9 @@ type View struct {
 	breatheEnabledUniform int32
 	vertAttrib            uint32
 	texCoordAttrib        uint32
-	textures              map[int]*Texture
 	blocks                []*Block
 	vao                   uint32
 	blockPos              [SIZE][SIZE][world.SECTION_Z_SIZE]*BlockPos
-	edges                 [SIZE][SIZE]*BlockPos
 	zoom                  float64
 	shear                 [3]float32
 	Cursor                *BlockPos
@@ -91,11 +75,6 @@ type View struct {
 	underShape            *shapes.Shape
 	daylight              [4]float32
 }
-
-const viewSize = 10
-const SIZE = 96
-const DRAW_SIZE = 48
-const SEARCH_SIZE = 16
 
 func getProjection(zoom float32, shear [3]float32) mgl32.Mat4 {
 	projection := mgl32.Ortho(-viewSize*zoom*0.95, viewSize*zoom*0.95, -viewSize*zoom*0.95, viewSize*zoom*0.95, -viewSize*zoom*2, viewSize*zoom*2)
@@ -156,74 +135,56 @@ func InitView(zoom float64, camera, shear [3]float32, loader *world.Loader) *Vie
 	gl.UniformMatrix4fv(view.cameraUniform, 1, false, &view.camera[0])
 	gl.Uniform1i(view.textureUniform, 0)
 
-	view.textures = map[int]*Texture{}
 	gl.GenVertexArrays(1, &view.vao)
 
 	// create a block for each shape
 	view.blocks = []*Block{}
 	for index, shape := range shapes.Shapes {
-		if shape == nil {
-			view.blocks = append(view.blocks, nil)
-		} else {
-			view.blocks = append(view.blocks, view.newBlock(int32(index), shape))
+		var block *Block
+		if shape != nil {
+			block = view.newBlock(int32(index), shape)
 		}
+		view.blocks = append(view.blocks, block)
 	}
-	fmt.Printf("Created %d blocks.\n", len(view.blocks))
 
+	// the blockpos array
 	for x := 0; x < SIZE; x++ {
 		for y := 0; y < SIZE; y++ {
 			for z := 0; z < world.SECTION_Z_SIZE; z++ {
-				model := mgl32.Ident4()
-
-				// translate to position
-				model.Set(0, 3, float32(x-SIZE/2))
-				model.Set(1, 3, float32(y-SIZE/2))
-				model.Set(2, 3, float32(z))
-
-				view.blockPos[x][y][z] = &BlockPos{
-					x:     x,
-					y:     y,
-					z:     z,
-					model: model,
-				}
-
-				if z == 0 {
-					edgeModel := mgl32.Ident4()
-
-					// translate to position
-					edgeModel.Set(0, 3, float32(x-SIZE/2))
-					edgeModel.Set(1, 3, float32(y-SIZE/2))
-					edgeModel.Set(2, 3, float32(z)+0.001)
-
-					view.edges[x][y] = &BlockPos{
-						x:             x,
-						y:             y,
-						z:             z,
-						model:         edgeModel,
-						animationType: shapes.ANIMATION_MOVE,
-					}
-				}
+				view.blockPos[x][y][z] = newBlockPos(x, y, z)
 			}
 		}
 	}
 
-	view.Cursor = &BlockPos{
-		x:     0,
-		y:     0,
-		z:     0,
-		model: mgl32.Ident4(),
-	}
+	view.Cursor = newBlockPos(0, 0, 0)
 
 	return view
 }
 
+func newBlockPos(x, y, z int) *BlockPos {
+	model := mgl32.Ident4()
+
+	// translate to position
+	model.Set(0, 3, float32(x-SIZE/2))
+	model.Set(1, 3, float32(y-SIZE/2))
+	model.Set(2, 3, float32(z))
+
+	return &BlockPos{
+		x:     x,
+		y:     y,
+		z:     z,
+		model: model,
+	}
+}
+
 func (view *View) newBlock(index int32, shape *shapes.Shape) *Block {
 	b := &Block{
-		sizeX: shape.Size[0],
-		sizeY: shape.Size[1],
-		sizeZ: shape.Size[2],
-		shape: shape,
-		index: index,
+		sizeX:   shape.Size[0],
+		sizeY:   shape.Size[1],
+		sizeZ:   shape.Size[2],
+		shape:   shape,
+		index:   index,
+		texture: LoadTexture(shape.ImageIndex),
 	}
 
 	// Configure the vertex data
@@ -234,52 +195,7 @@ func (view *View) newBlock(index int32, shape *shapes.Shape) *Block {
 	verts := b.vertices()
 	gl.BufferData(gl.ARRAY_BUFFER, len(verts)*4, gl.Ptr(verts), gl.STATIC_DRAW)
 
-	// load the texture if needed
-	tex, ok := view.textures[shape.ImageIndex]
-	if ok == false {
-		texID, err := loadTexture(shapes.Images[shape.ImageIndex])
-		if err != nil {
-			panic(err)
-		}
-		tex = &Texture{
-			texture:      texID,
-			textureIndex: int32(len(view.textures)),
-		}
-		view.textures[shape.ImageIndex] = tex
-	}
-	b.texture = tex
-
 	return b
-}
-
-func loadTexture(img image.Image) (uint32, error) {
-	// img := shapes.Images[0]
-	rgba := image.NewRGBA(img.Bounds())
-	if rgba.Stride != rgba.Rect.Size().X*4 {
-		return 0, fmt.Errorf("unsupported stride")
-	}
-	draw.Draw(rgba, rgba.Bounds(), img, image.Point{0, 0}, draw.Src)
-
-	var texture uint32
-	gl.GenTextures(1, &texture)
-	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, texture)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	gl.TexImage2D(
-		gl.TEXTURE_2D,
-		0,
-		gl.RGBA,
-		int32(rgba.Rect.Size().X),
-		int32(rgba.Rect.Size().Y),
-		0,
-		gl.RGBA,
-		gl.UNSIGNED_BYTE,
-		gl.Ptr(rgba.Pix))
-
-	return texture, nil
 }
 
 func (b *Block) vertices() []float32 {
@@ -552,6 +468,54 @@ func (view *View) MoveShape(worldX, worldY, worldZ, newWorldX, newWorldY int, is
 	return -1
 }
 
+func (view *View) tryMove(newViewX, newViewY, newViewZ, startWorldX, startWorldY, startWorldZ int, cacheFit, isFlying bool) *BlockPos {
+	// can we drop down here? (check this before the same-z move)
+	z := newViewZ
+	var standingOn *BlockPos
+	for z > 0 {
+		standingOn = view.getBlockerWithCache(view.blockPos[newViewX][newViewY][z-1], startWorldX, startWorldY, startWorldZ, cacheFit)
+		if standingOn != nil {
+			break
+		}
+		z--
+	}
+	if !isFlying && standingOn != nil && shapes.Shapes[standingOn.pos.Block-1].NoSupport {
+		return nil
+	}
+	if z < newViewZ {
+		return view.blockPos[newViewX][newViewY][z]
+	}
+
+	// same z move
+	newNode := view.blockPos[newViewX][newViewY][newViewZ]
+	if view.getBlockerWithCache(newNode, startWorldX, startWorldY, startWorldZ, cacheFit) == nil {
+		return newNode
+	}
+
+	// step up?
+	newNode = view.blockPos[newViewX][newViewY][newViewZ+1]
+	if view.getBlockerWithCache(newNode, startWorldX, startWorldY, startWorldZ, cacheFit) == nil {
+		return newNode
+	}
+	return nil
+}
+
+func (view *View) getBlockerWithCache(node *BlockPos, startWorldX, startWorldY, startWorldZ int, cacheFit bool) *BlockPos {
+	if cacheFit {
+		if !node.pathNode.fitCalled {
+			node.pathNode.fitCalled = true
+			node.pathNode.blocker = view.GetBlocker(
+				node.worldX, node.worldY, node.worldZ,
+				startWorldX, startWorldY, startWorldZ)
+		}
+		return node.pathNode.blocker
+	} else {
+		return view.GetBlocker(
+			node.worldX, node.worldY, node.worldZ,
+			startWorldX, startWorldY, startWorldZ)
+	}
+}
+
 func (view *View) SetShape(worldX, worldY, worldZ int, shapeIndex int) *BlockPos {
 	view.Loader.SetShape(worldX, worldY, worldZ, shapeIndex)
 	viewX, viewY, viewZ, validPos := view.toViewPos(worldX, worldY, worldZ)
@@ -723,6 +687,8 @@ func (view *View) Draw(delta float64) {
 	}
 }
 
+var ZERO_OFFSET [2]float32
+
 func (b *BlockPos) Draw(view *View, block *Block, extraIndex int) {
 	if !state.init || state.texture != block.texture.texture {
 		gl.BindTexture(gl.TEXTURE_2D, block.texture.texture)
@@ -801,221 +767,6 @@ func (view *View) SetDaylight(r, g, b, a float32) {
 	view.daylight[1] = g / 255
 	view.daylight[2] = b / 255
 	view.daylight[3] = 1
-}
-
-type PathStep [3]int
-
-func (view *View) FindPath(sx, sy, sz, ex, ey, ez int, isFlying bool) []PathStep {
-	startViewX, startViewY, startViewZ, startOk := view.toViewPos(sx, sy, sz)
-	endViewX, endViewY, endViewZ, endOk := view.toViewPos(ex, ey, ez)
-	if startOk && endOk {
-		return view.findPath(startViewX, startViewY, startViewZ, endViewX, endViewY, endViewZ, sx, sy, sz, isFlying)
-	}
-	return nil
-}
-
-/**
-	AStar search
-
-	Implemented from: astar-list.js http://github.com/bgrins/javascript-astar
-    MIT License
-
-    ** You should not use this implementation (it is quite slower than the heap implementation) **
-
-    Implements the astar search algorithm in javascript
-    Based off the original blog post http://www.briangrinstead.com/blog/astar-search-algorithm-in-javascript
-    It has since been replaced with astar.js which uses a Binary Heap and is quite faster, but I am leaving
-    it here since it is more strictly following pseudocode for the Astar search
-*/
-func (view *View) findPath(startViewX, startViewY, startViewZ, endViewX, endViewY, endViewZ, startWorldX, startWorldY, startWorldZ int, isFlying bool) []PathStep {
-	view.resetPathFind()
-	end := view.blockPos[endViewX][endViewY][endViewZ]
-	openList := []*BlockPos{view.blockPos[startViewX][startViewY][startViewZ]}
-	for len(openList) > 0 {
-		// Grab the lowest f(x) to process next
-		lowInd := 0
-		for i := range openList {
-			if openList[i].pathNode.f < openList[lowInd].pathNode.f {
-				lowInd = i
-			}
-		}
-
-		currentNode := openList[lowInd]
-
-		// End case -- result has been found, return the traced path
-		if currentNode.x == end.x && currentNode.y == end.y && currentNode.z == end.z {
-			return view.generatePath(currentNode)
-		}
-
-		// Normal case -- move currentNode from open to closed, process each of its neighbors
-		openList = remove(openList, lowInd)
-		currentNode.pathNode.closed = true
-
-		// fmt.Printf("Processing: %d,%d,%d. List len=%d\n", currentNode.x, currentNode.y, currentNode.z, len(openList))
-
-		neighbors := view.astarNeighbors(currentNode, startWorldX, startWorldY, startWorldZ, isFlying)
-		for _, neighbor := range neighbors {
-			// process only valid nodes
-			if !neighbor.pathNode.closed {
-				// fmt.Printf("\ttrying %d,%d,%d\n", neighbor.x, neighbor.y, neighbor.z)
-				// g score is the shortest distance from start to current node, we need to check if
-				//   the path we have arrived at this neighbor is the shortest one we have seen yet
-				// adding 1: 1 is the distance from a node to it's neighbor
-				gScore := currentNode.pathNode.g + 1
-				gScoreIsBest := false
-
-				if !neighbor.pathNode.visited {
-					// This the the first time we have arrived at this node, it must be the best
-					// Also, we need to take the h (heuristic) score since we haven't done so yet
-					gScoreIsBest = true
-					neighbor.pathNode.h = heuristic(neighbor, end)
-					neighbor.pathNode.visited = true
-					openList = append(openList, neighbor)
-				} else if gScore < neighbor.pathNode.g {
-					// We have already seen the node, but last time it had a worse g (distance from start)
-					gScoreIsBest = true
-				}
-
-				if gScoreIsBest {
-					// Found an optimal (so far) path to this node.  Store info on how we got here and
-					//  just how good it really is...
-					neighbor.pathNode.parent = currentNode
-					neighbor.pathNode.g = gScore
-					neighbor.pathNode.f = neighbor.pathNode.g + neighbor.pathNode.h
-				}
-			}
-		}
-	}
-
-	// No result was found -- nil signifies failure to find path
-	return nil
-}
-
-func heuristic(pos0, pos1 *BlockPos) int {
-	// Manhattan distance. See list of heuristics: http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html
-	d1 := util.AbsInt(pos1.x - pos0.x)
-	d2 := util.AbsInt(pos1.y - pos0.y)
-	d3 := util.AbsInt(pos1.z - pos0.z)
-	return d1 + d2 + d3
-}
-
-func (view *View) astarNeighbors(node *BlockPos, startWorldX, startWorldY, startWorldZ int, isFlying bool) []*BlockPos {
-	ret := []*BlockPos{}
-	if node.x-1 >= 0 {
-		if newNode := view.tryInDir(node, -1, 0, startWorldX, startWorldY, startWorldZ, isFlying); newNode != nil {
-			ret = append(ret, newNode)
-		}
-	}
-	if node.x+1 < SIZE {
-		if newNode := view.tryInDir(node, 1, 0, startWorldX, startWorldY, startWorldZ, isFlying); newNode != nil {
-			ret = append(ret, newNode)
-		}
-	}
-	if node.y-1 >= 0 {
-		if newNode := view.tryInDir(node, 0, -1, startWorldX, startWorldY, startWorldZ, isFlying); newNode != nil {
-			ret = append(ret, newNode)
-		}
-	}
-	if node.y+1 < SIZE {
-		if newNode := view.tryInDir(node, 0, 1, startWorldX, startWorldY, startWorldZ, isFlying); newNode != nil {
-			ret = append(ret, newNode)
-		}
-	}
-	return ret
-}
-
-func (view *View) tryInDir(node *BlockPos, dx, dy, startWorldX, startWorldY, startWorldZ int, isFlying bool) *BlockPos {
-	return view.tryMove(node.x+dx, node.y+dy, node.z, startWorldX, startWorldY, startWorldZ, true, isFlying)
-}
-
-func (view *View) tryMove(newViewX, newViewY, newViewZ, startWorldX, startWorldY, startWorldZ int, cacheFit, isFlying bool) *BlockPos {
-	// can we drop down here? (check this before the same-z move)
-	z := newViewZ
-	var standingOn *BlockPos
-	for z > 0 {
-		standingOn = view.getBlocker(view.blockPos[newViewX][newViewY][z-1], startWorldX, startWorldY, startWorldZ, cacheFit)
-		if standingOn != nil {
-			break
-		}
-		z--
-	}
-	if !isFlying && standingOn != nil && shapes.Shapes[standingOn.pos.Block-1].NoSupport {
-		return nil
-	}
-	if z < newViewZ {
-		return view.blockPos[newViewX][newViewY][z]
-	}
-
-	// same z move
-	newNode := view.blockPos[newViewX][newViewY][newViewZ]
-	if view.getBlocker(newNode, startWorldX, startWorldY, startWorldZ, cacheFit) == nil {
-		return newNode
-	}
-
-	// step up?
-	newNode = view.blockPos[newViewX][newViewY][newViewZ+1]
-	if view.getBlocker(newNode, startWorldX, startWorldY, startWorldZ, cacheFit) == nil {
-		return newNode
-	}
-	return nil
-}
-
-func (view *View) getBlocker(node *BlockPos, startWorldX, startWorldY, startWorldZ int, cacheFit bool) *BlockPos {
-	if cacheFit {
-		if !node.pathNode.fitCalled {
-			node.pathNode.fitCalled = true
-			node.pathNode.blocker = view.GetBlocker(
-				node.worldX, node.worldY, node.worldZ,
-				startWorldX, startWorldY, startWorldZ)
-		}
-		return node.pathNode.blocker
-	} else {
-		return view.GetBlocker(
-			node.worldX, node.worldY, node.worldZ,
-			startWorldX, startWorldY, startWorldZ)
-	}
-}
-
-func (view *View) generatePath(currentNode *BlockPos) []PathStep {
-	ret := []PathStep{}
-	for currentNode.pathNode.parent != nil {
-		wx, wy, wz := view.toWorldPos(currentNode.x, currentNode.y, currentNode.z)
-		ret = append(ret, PathStep{wx, wy, wz})
-		currentNode = currentNode.pathNode.parent
-	}
-	return reverse(ret)
-}
-
-func remove(s []*BlockPos, i int) []*BlockPos {
-	s[i] = s[len(s)-1]
-	// We do not need to put s[i] at the end, as it will be discarded anyway
-	return s[:len(s)-1]
-}
-
-func reverse(nodes []PathStep) []PathStep {
-	for i := 0; i < len(nodes)/2; i++ {
-		j := len(nodes) - i - 1
-		nodes[i], nodes[j] = nodes[j], nodes[i]
-	}
-	return nodes
-}
-
-func (view *View) resetPathFind() {
-	for x := range view.blockPos {
-		for y := range view.blockPos[x] {
-			for _, blockPos := range view.blockPos[x][y] {
-				blockPos.pathNode.f = 0
-				blockPos.pathNode.g = 0
-				blockPos.pathNode.h = 0
-				blockPos.pathNode.blocker = nil
-				blockPos.pathNode.fitCalled = false
-				blockPos.pathNode.visited = false
-				blockPos.pathNode.closed = false
-				blockPos.pathNode.parent = nil
-				blockPos.pathNode.debug = ""
-			}
-		}
-	}
 }
 
 var vertexShader = `
