@@ -15,6 +15,9 @@ isongn is a cross-platform, open-world, isometric, scriptable rendering engine. 
 - Daylight color cycle, weather effects
 - Shader animations for vegeation, etc
 
+# Example games
+- [Enalim](https://github.com/uzudil/enalim)
+
 ## The tech
 
 For graphics, isongn uses opengl. Instead of sorting isometric shapes [using the cpu](https://shaunlebron.github.io/IsometricBlocks/), isongn actually draws in 3d space and lets the gpu hardware sort the shapes in the z buffer. It's the best of both worlds: old school graphics and the power of modern hardware.
