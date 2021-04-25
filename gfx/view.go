@@ -17,15 +17,6 @@ const (
 	SEARCH_SIZE = 16
 )
 
-// Block is a displayed Shape
-type Block struct {
-	vbo                 uint32
-	sizeX, sizeY, sizeZ float32
-	shape               *shapes.Shape
-	texture             *Texture
-	index               int32
-}
-
 // BlockPos is a displayed Shape at a location
 type BlockPos struct {
 	model                  mgl32.Mat4
@@ -140,14 +131,7 @@ func InitView(zoom float64, camera, shear [3]float32, loader *world.Loader) *Vie
 	gl.GenVertexArrays(1, &view.vao)
 
 	// create a block for each shape
-	view.blocks = []*Block{}
-	for index, shape := range shapes.Shapes {
-		var block *Block
-		if shape != nil {
-			block = view.newBlock(int32(index), shape)
-		}
-		view.blocks = append(view.blocks, block)
-	}
+	view.blocks = view.initBlocks()
 
 	// the blockpos array
 	for x := 0; x < SIZE; x++ {
@@ -158,7 +142,7 @@ func InitView(zoom float64, camera, shear [3]float32, loader *world.Loader) *Vie
 		}
 	}
 
-	view.Cursor = newBlockPos(0, 0, 0)
+	view.Cursor = newBlockPos(SIZE/2, SIZE/2, 0)
 
 	return view
 }
@@ -177,80 +161,6 @@ func newBlockPos(x, y, z int) *BlockPos {
 		z:     z,
 		model: model,
 	}
-}
-
-func (view *View) newBlock(index int32, shape *shapes.Shape) *Block {
-	b := &Block{
-		sizeX:   shape.Size[0],
-		sizeY:   shape.Size[1],
-		sizeZ:   shape.Size[2],
-		shape:   shape,
-		index:   index,
-		texture: LoadTexture(shape.ImageIndex),
-	}
-
-	// Configure the vertex data
-	gl.BindVertexArray(view.vao)
-
-	gl.GenBuffers(1, &b.vbo)
-	gl.BindBuffer(gl.ARRAY_BUFFER, b.vbo)
-	verts := b.vertices()
-	gl.BufferData(gl.ARRAY_BUFFER, len(verts)*4, gl.Ptr(verts), gl.STATIC_DRAW)
-
-	return b
-}
-
-func (b *Block) vertices() []float32 {
-	// coord system is: z up, x to left, y to right
-	//         z
-	//         |
-	//         |
-	//        / \
-	//       /   \
-	//      x     y
-	w := b.sizeX
-	h := b.sizeY
-	d := b.sizeZ
-
-	// total width/height of texture
-	tx := h + w
-	ty := h + d + w
-
-	// fudge factor for edges
-	var f float32 = b.shape.Fudge
-
-	points := []float32{
-		w, 0, d, f, (w - f) / ty,
-		w, 0, 0, f, (w + d) / ty,
-		w, h, 0, h / tx, 1 - f,
-		0, h, 0, 1 - f, (h + d) / ty,
-		0, h, d, 1 - f, (h - f) / ty,
-		0, 0, d, w / tx, f,
-		w, h, d, h / tx, (w + h - f) / ty,
-	}
-
-	// scale and translate tex coords to within larger texture
-	for i := 0; i < 7; i++ {
-		points[i*5+3] *= b.shape.Tex.TexDim[0]
-		points[i*5+3] += b.shape.Tex.TexOffset[0]
-
-		points[i*5+4] *= b.shape.Tex.TexDim[1]
-		points[i*5+4] += b.shape.Tex.TexOffset[1]
-	}
-
-	left := []int{0, 1, 2, 0, 2, 6}
-	right := []int{3, 4, 2, 2, 4, 6}
-	top := []int{5, 0, 4, 0, 6, 4}
-
-	v := []float32{}
-	for _, side := range [][]int{left, right, top} {
-		for _, idx := range side {
-			for t := 0; t < 5; t++ {
-				v = append(v, points[idx*5+t])
-			}
-		}
-	}
-	return v
 }
 
 func (view *View) SetMaxZ(z int) {
@@ -627,13 +537,15 @@ func (view *View) isVisible(blockPos *BlockPos) bool {
 	if blockPos.pos != nil {
 		// is it below the max Z?
 		zOk := blockPos.z < view.maxZ
-		if view.underShape != nil && zOk {
-			// if it's below the max and undershape is set: only display if under (ie. dungeon)
-			return zOk && blockPos.pos.Under > 0 && shapes.Shapes[blockPos.pos.Under-1].Group == view.underShape.Group
-		}
-		if view.underShape == nil && !zOk {
-			// if above the max and undershape is not set: show mountain tops
-			return blockPos.pos.Block > 0 && shapes.Shapes[blockPos.pos.Block-1].Group > 0
+		if !view.Loader.IsEditorMode() {
+			if view.underShape != nil && zOk {
+				// if it's below the max and undershape is set: only display if under (ie. dungeon)
+				return zOk && blockPos.pos.Under > 0 && shapes.Shapes[blockPos.pos.Under-1].Group == view.underShape.Group
+			}
+			if view.underShape == nil && !zOk {
+				// if above the max and undershape is not set: show mountain tops
+				return blockPos.pos.Block > 0 && shapes.Shapes[blockPos.pos.Block-1].Group > 0
+			}
 		}
 		return zOk
 	}

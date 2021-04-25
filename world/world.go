@@ -67,6 +67,10 @@ func (loader *Loader) SetIoMode(mode int) {
 	loader.ioMode = mode
 }
 
+func (loader *Loader) IsEditorMode() bool {
+	return loader.ioMode == EDITOR_MODE
+}
+
 func (loader *Loader) MoveTo(x, y int) bool {
 	if x >= 0 && y >= 0 && (loader.X != x || loader.Y != y) {
 		loader.X = x
