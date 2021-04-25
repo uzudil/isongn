@@ -13,7 +13,7 @@ isongn is a cross-platform, open-world, isometric, scriptable rendering engine. 
 - Map-size bound only by disk space and [golang's int](https://yourbasic.org/golang/max-min-int-uint/)
 - Simulated [low-res](https://github.com/uzudil/enalim/blob/main/config.json#L12), old-school video resolution
 - Game control from [script](https://github.com/uzudil/bscript) with built-in functions for movement, path-finding, etc.
-- [Daylight](https://github.com/uzudil/enalim/blob/main/config.json#L22) color cycle, weather effects
+- Date/time calendar with a [daylight](https://github.com/uzudil/enalim/blob/main/config.json#L22) color cycle plus, weather effects
 - Shader animations for vegeation, etc
 - [Animated shapes](https://github.com/uzudil/enalim/blob/main/config.json#L354) for creatures, etc.
 - [Truetype font](https://github.com/uzudil/enalim/blob/main/config.json#L13) and simple ui overlay rendering
