@@ -6,7 +6,7 @@
 
 isongn is a cross-platform, open-world, isometric, scriptable rendering engine. We take care of disk io, graphics, sound, collision detection and map abstractions. You provide the assets, event handling scripts and the vision. Realize your old-school rpg/action-game dreams with easy-to-use modern technology!
 
-# Features
+## Features
 - High speed, isometric rendering
 - Completely configurable rendering engine
 - Simulated low-res, old-school game feel
@@ -15,7 +15,7 @@ isongn is a cross-platform, open-world, isometric, scriptable rendering engine. 
 - Daylight color cycle, weather effects
 - Shader animations for vegeation, etc
 
-# Example games
+## Example games
 - [Enalim](https://github.com/uzudil/enalim)
 
 ## The tech
