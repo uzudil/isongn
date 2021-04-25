@@ -462,7 +462,7 @@ func (view *View) MoveShape(worldX, worldY, worldZ, newWorldX, newWorldY int, is
 
 	// figure out the new Z
 	view.context.isPathing = false
-	view.context.isFlying = false
+	view.context.isFlying = isFlying
 	view.context.start = view.blockPos[startViewX][startViewY][startViewZ]
 	newPos := view.tryMove(newViewX, newViewY, worldZ)
 
