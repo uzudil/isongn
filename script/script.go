@@ -44,19 +44,19 @@ func loadGame(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 }
 
 func intersectsShapes(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
-	x := int(arg[0].(float64))
-	y := int(arg[1].(float64))
-	z := int(arg[2].(float64))
+	ax := int(arg[0].(float64))
+	ay := int(arg[1].(float64))
+	az := int(arg[2].(float64))
 	nameA := arg[3].(string)
-	nameB := arg[4].(string)
+	bx := int(arg[4].(float64))
+	by := int(arg[5].(float64))
+	bz := int(arg[6].(float64))
+	nameB := arg[7].(string)
 	shapeA := shapes.Shapes[shapes.Names[nameA]]
 	shapeB := shapes.Shapes[shapes.Names[nameB]]
-
-	app := ctx.App["app"].(*gfx.App)
-
-	if intersects(x, x+int(shapeA.Size[0]), app.Loader.X, app.Loader.X+int(shapeB.Size[0])) &&
-		intersects(y, y+int(shapeA.Size[1]), app.Loader.Y, app.Loader.Y+int(shapeB.Size[1])) &&
-		intersects(z, z+int(shapeA.Size[2]), app.Game.GetZ(), app.Game.GetZ()+int(shapeB.Size[2])) {
+	if intersects(ax, ax+int(shapeA.Size[0]), bx, bx+int(shapeB.Size[0])) &&
+		intersects(ay, ay+int(shapeA.Size[1]), by, by+int(shapeB.Size[1])) &&
+		intersects(az, az+int(shapeA.Size[2]), bz, bz+int(shapeB.Size[2])) {
 		return true, nil
 	}
 	return false, nil
