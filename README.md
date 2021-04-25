@@ -1,19 +1,22 @@
 # isongn (iso-engine)
 
-![alt text](images/anim.gif "Title")
+<iframe width="560" height="315" src="https://www.youtube.com/embed/lR5bW-GWPvs" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 ## What is it?
 
 isongn is a cross-platform, open-world, isometric, scriptable rendering engine. We take care of disk io, graphics, sound, collision detection and map abstractions. You provide the assets, event handling scripts and the vision. Realize your old-school rpg/action-game dreams with easy-to-use modern technology!
 
 ## Features
-- High speed, isometric rendering
-- Completely configurable rendering engine
-- Simulated low-res, old-school game feel
-- Game control from [script](https://github.com/uzudil/bscript)
-- Near-infinite map size with 
-- Daylight color cycle, weather effects
+- High speed, smooth-scrolling, isometric rendering of 2D images
+- Completely [configurable](https://github.com/uzudil/enalim/blob/main/config.json#L51) rendering engine
+- Map-size bound only by disk space and [golang's int](https://yourbasic.org/golang/max-min-int-uint/)
+- Simulated [low-res](https://github.com/uzudil/enalim/blob/main/config.json#L12), old-school video resolution
+- Game control from [script](https://github.com/uzudil/bscript) with built-in functions for movement, path-finding, etc.
+- [Daylight](https://github.com/uzudil/enalim/blob/main/config.json#L22) color cycle, weather effects
 - Shader animations for vegeation, etc
+- [Animated shapes](https://github.com/uzudil/enalim/blob/main/config.json#L354) for creatures, etc.
+- [Truetype font](https://github.com/uzudil/enalim/blob/main/config.json#L13) and simple ui overlay rendering
+- Map editor included (extendable via script)
 
 ## Example games
 - [Enalim](https://github.com/uzudil/enalim)
