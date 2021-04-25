@@ -1,6 +1,7 @@
 # isongn (iso-engine)
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/lR5bW-GWPvs" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+[![IMAGE ALT TEXT HERE](/images/screen1.png)](https://youtu.be/lR5bW-GWPvs)
+Click on image to view [video](https://youtu.be/lR5bW-GWPvs).
 
 ## What is it?
 
