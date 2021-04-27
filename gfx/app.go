@@ -66,11 +66,14 @@ type App struct {
 	windowWidth, windowHeight       int
 	windowWidthDpi, windowHeightDpi int
 	dpiX, dpiY                      float32
+	pxWidth, pxHeight               int
 	frameBuffer, uiFrameBuffer      *FrameBuffer
 	fadeDir                         int
 	fadeTimer                       float64
 	fadeFx                          func()
 	fade                            float32
+	MouseX, MouseY                  int32
+	readSelection                   bool
 }
 
 func NewApp(game Game, gameDir string, windowWidth, windowHeight int, targetFps float64) *App {
@@ -98,14 +101,16 @@ func NewApp(game Game, gameDir string, windowWidth, windowHeight int, targetFps 
 	app.Font = font
 	app.Dir = initUserdir(appConfig.Name)
 	app.Window = initWindow(windowWidth, windowHeight)
-	pxWidth, pxHeight := app.Window.GetFramebufferSize()
-	app.dpiX = float32(pxWidth) / float32(windowWidth)
-	app.dpiY = float32(pxHeight) / float32(windowHeight)
+	app.pxWidth, app.pxHeight = app.Window.GetFramebufferSize()
+	app.dpiX = float32(app.pxWidth) / float32(windowWidth)
+	app.dpiY = float32(app.pxHeight) / float32(windowHeight)
 	fmt.Printf("Resolution: %dx%d Window: %dx%d Dpi: %fx%f\n", app.Width, app.Height, windowWidth, windowHeight, app.dpiX, app.dpiY)
 	app.windowWidthDpi = int(float32(app.windowWidth) * app.dpiX)
 	app.windowHeightDpi = int(float32(app.windowHeight) * app.dpiY)
 	app.Window.SetKeyCallback(app.Keypressed)
 	app.Window.SetScrollCallback(app.MouseScroll)
+	app.Window.SetCursorPosCallback(app.MousePos)
+	app.Window.SetMouseButtonCallback(app.MouseClick)
 	app.frameBuffer = NewFrameBuffer(int32(width), int32(height), true)
 	app.uiFrameBuffer = NewFrameBuffer(int32(width), int32(height), false)
 	err = shapes.InitShapes(gameDir, appConfig.shapes)
@@ -309,6 +314,17 @@ func (app *App) MouseScroll(w *glfw.Window, xoffs, yoffs float64) {
 	app.View.Zoom(yoffs)
 }
 
+func (app *App) MousePos(w *glfw.Window, xpos float64, ypos float64) {
+	app.MouseX = int32(xpos)
+	app.MouseY = int32(ypos)
+}
+
+func (app *App) MouseClick(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
+	if action == 1 {
+		app.readSelection = true
+	}
+}
+
 func (app *App) CalcFps() {
 	currentTime := glfw.GetTime()
 	delta := currentTime - app.lastUpdate
@@ -340,6 +356,7 @@ func (app *App) Run() {
 
 	last := glfw.GetTime()
 	var delta float64
+	selection := [4]byte{}
 	for !app.Window.ShouldClose() {
 		// reduce fan noise / run at target fps
 		last, delta = app.Sleep(last)
@@ -352,8 +369,26 @@ func (app *App) Run() {
 
 		app.incrFade(last)
 
+		if app.readSelection {
+			// mouse click selection
+			app.frameBuffer.Enable(app.Width, app.Height)
+			app.View.Draw(delta, true)
+			app.frameBuffer.Draw(app.windowWidthDpi, app.windowHeightDpi, app.fade)
+			mx := float32(app.MouseX)*app.dpiX + 0.5
+			my := float32(app.MouseY)*app.dpiY + 0.5
+			gl.ReadPixels(
+				int32(mx),
+				int32(float32(app.pxHeight)-my),
+				1, 1,
+				gl.RGBA, gl.UNSIGNED_BYTE,
+				gl.Ptr(&selection[0]),
+			)
+			fmt.Printf("Mouse click: pos: %v\n", selection)
+			app.readSelection = false
+		}
+
 		app.frameBuffer.Enable(app.Width, app.Height)
-		app.View.Draw(delta)
+		app.View.Draw(delta, false)
 		app.frameBuffer.Draw(app.windowWidthDpi, app.windowHeightDpi, app.fade)
 
 		app.uiFrameBuffer.Enable(app.Width, app.Height)

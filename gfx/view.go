@@ -19,18 +19,19 @@ const (
 
 // BlockPos is a displayed Shape at a location
 type BlockPos struct {
-	model                  mgl32.Mat4
-	x, y, z                int
-	worldX, worldY, worldZ int
-	pos                    *world.SectionPosition
-	box                    BoundingBox
-	block                  *Block
-	dir                    shapes.Direction
-	animationTimer         float64
-	animationType          int
-	animationSpeed         float64
-	ScrollOffset           [2]float32
-	pathNode               PathNode
+	model                      mgl32.Mat4
+	x, y, z                    int
+	worldX, worldY, worldZ     int
+	pos                        *world.SectionPosition
+	box                        BoundingBox
+	block                      *Block
+	dir                        shapes.Direction
+	animationTimer             float64
+	animationType              int
+	animationSpeed             float64
+	ScrollOffset               [2]float32
+	pathNode                   PathNode
+	selectColor, noSelectColor [3]float32
 }
 
 type View struct {
@@ -53,6 +54,7 @@ type View struct {
 	swayEnabledUniform    int32
 	bobEnabledUniform     int32
 	breatheEnabledUniform int32
+	selectModeUniform     int32
 	vertAttrib            uint32
 	texCoordAttrib        uint32
 	blocks                []*Block
@@ -120,6 +122,7 @@ func InitView(zoom float64, camera, shear [3]float32, loader *world.Loader) *Vie
 	view.textureOffsetUniform = gl.GetUniformLocation(view.program, gl.Str("textureOffset\x00"))
 	view.alphaMinUniform = gl.GetUniformLocation(view.program, gl.Str("alphaMin\x00"))
 	view.daylightUniform = gl.GetUniformLocation(view.program, gl.Str("daylight\x00"))
+	view.selectModeUniform = gl.GetUniformLocation(view.program, gl.Str("selectMode\x00"))
 	gl.BindFragDataLocation(view.program, 0, gl.Str("outputColor\x00"))
 	view.vertAttrib = uint32(gl.GetAttribLocation(view.program, gl.Str("vert\x00")))
 	view.texCoordAttrib = uint32(gl.GetAttribLocation(view.program, gl.Str("vertTexCoord\x00")))
@@ -156,10 +159,12 @@ func newBlockPos(x, y, z int) *BlockPos {
 	model.Set(2, 3, float32(z))
 
 	return &BlockPos{
-		x:     x,
-		y:     y,
-		z:     z,
-		model: model,
+		x:             x,
+		y:             y,
+		z:             z,
+		model:         model,
+		selectColor:   [3]float32{float32(x) / 255, float32(y) / 255, float32(z) / 255},
+		noSelectColor: [3]float32{-1, -1, -1},
 	}
 }
 
@@ -562,7 +567,7 @@ type DrawState struct {
 
 var state DrawState = DrawState{}
 
-func (view *View) Draw(delta float64) {
+func (view *View) Draw(delta float64, selectMode bool) {
 	gl.Enable(gl.DEPTH_TEST)
 	gl.ClearColor(0, 0, 0, 1)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -581,6 +586,12 @@ func (view *View) Draw(delta float64) {
 	view.traverseForDraw(func(x, y, z int) {
 		blockPos := view.blockPos[x][y][z]
 		if view.isVisible(blockPos) {
+			if selectMode {
+				gl.Uniform3fv(view.selectModeUniform, 1, &blockPos.selectColor[0])
+			} else {
+				gl.Uniform3fv(view.selectModeUniform, 1, &blockPos.noSelectColor[0])
+			}
+
 			if blockPos.pos.Block > 0 {
 				blockPos.Draw(view, view.blocks[blockPos.pos.Block-1], -1)
 			}
@@ -741,13 +752,18 @@ var fragmentShader = `
 uniform sampler2D tex;
 uniform float alphaMin;
 uniform vec4 daylight;
+uniform vec3 selectMode;
 in vec2 fragTexCoord;
 layout(location = 0) out vec4 outputColor;
 void main() {
-	vec4 val = texture(tex, fragTexCoord);
-	if (val.a < alphaMin) {
-		discard;
+	if(selectMode.r == -1) {
+		vec4 val = texture(tex, fragTexCoord);
+		if (val.a < alphaMin) {
+			discard;
+		}
+		outputColor = val * daylight;
+	} else {
+		outputColor = vec4(selectMode.r, selectMode.g, selectMode.b, 1);
 	}
-	outputColor = val * daylight;
 }
 ` + "\x00"
