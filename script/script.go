@@ -374,6 +374,21 @@ func findPath(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	}
 }
 
+func didClick(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	app := ctx.App["app"].(*gfx.App)
+	return app.View.DidClick, nil
+}
+
+func getClick(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	app := ctx.App["app"].(*gfx.App)
+	n := app.View.GetClick()
+	r := make([]interface{}, 3)
+	r[0] = float64(n[0])
+	r[1] = float64(n[1])
+	r[2] = float64(n[2])
+	return &r, nil
+}
+
 var constants map[string]interface{} = map[string]interface{}{
 	// directions
 	"DirW":    float64(shapes.DIR_W),
@@ -547,6 +562,8 @@ func InitScript() {
 	bscript.AddBuiltin("distance", distance)
 	bscript.AddBuiltin("findPath", findPath)
 	bscript.AddBuiltin("setPathThroughShapes", setPathThroughShapes)
+	bscript.AddBuiltin("didClick", didClick)
+	bscript.AddBuiltin("getClick", getClick)
 	for k, v := range constants {
 		bscript.AddConstant(k, v)
 	}

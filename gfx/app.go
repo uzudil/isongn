@@ -364,9 +364,6 @@ func (app *App) Run() {
 		// show FPS in window title
 		app.CalcFps()
 
-		// handle events
-		app.Game.Events(delta, app.fadeDir)
-
 		app.incrFade(last)
 
 		if app.readSelection {
@@ -383,9 +380,12 @@ func (app *App) Run() {
 				gl.RGBA, gl.UNSIGNED_BYTE,
 				gl.Ptr(&selection[0]),
 			)
-			fmt.Printf("Mouse click: pos: %v\n", selection)
+			app.View.SetClick(selection[:])
 			app.readSelection = false
 		}
+
+		// handle events
+		app.Game.Events(delta, app.fadeDir)
 
 		app.frameBuffer.Enable(app.Width, app.Height)
 		app.View.Draw(delta, false)
