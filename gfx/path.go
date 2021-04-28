@@ -19,6 +19,7 @@ type PathNode struct {
 type ViewContext struct {
 	isFlying          bool
 	isPathing         bool
+	usePathThrough    bool
 	pathThroughShapes map[*shapes.Shape]bool
 	start, end        *BlockPos
 }
@@ -36,7 +37,14 @@ func (view *View) FindPath(sx, sy, sz, ex, ey, ez int, isFlying bool) []PathStep
 	if startOk && endOk {
 		view.context.start = view.blockPos[startViewX][startViewY][startViewZ]
 		view.context.end = view.blockPos[endViewX][endViewY][endViewZ]
+		// first try w/o doors
+		view.context.usePathThrough = false
 		steps = view.findPath()
+		if steps == nil {
+			// try again with doors
+			view.context.usePathThrough = true
+			steps = view.findPath()
+		}
 	}
 	view.context.isPathing = false
 	return steps
