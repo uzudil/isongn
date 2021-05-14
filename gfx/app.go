@@ -3,8 +3,12 @@ package gfx
 import (
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,16 +16,21 @@ import (
 
 	"github.com/go-gl/gl/all-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/uzudil/isongn/shapes"
 	"github.com/uzudil/isongn/world"
 )
 
 const fadeInterval = 0.5
+const minDragPixels = 5
+const dontReadPos = 0
+const readDragPos = 1
+const readMousePos = 2
 
 type Game interface {
 	Init(app *App, config map[string]interface{})
 	Name() string
-	Events(delta float64, fadeDir int)
+	Events(delta float64, fadeDir int, mouseX, mouseY int32)
 	GetZ() int
 }
 
@@ -73,7 +82,12 @@ type App struct {
 	fadeFx                          func()
 	fade                            float32
 	MouseX, MouseY                  int32
-	readSelection                   bool
+	MousePixelX, MousePixelY        int32
+	DragStartX, DragStartY          int32
+	readSelection                   int
+	MouseButtonAction               int
+	Dragging                        bool
+	cursorPanel                     *Panel
 }
 
 func NewApp(game Game, gameDir string, windowWidth, windowHeight int, targetFps float64) *App {
@@ -317,11 +331,54 @@ func (app *App) MouseScroll(w *glfw.Window, xoffs, yoffs float64) {
 func (app *App) MousePos(w *glfw.Window, xpos float64, ypos float64) {
 	app.MouseX = int32(xpos)
 	app.MouseY = int32(ypos)
+	app.MousePixelX = int32(xpos / float64(app.windowWidth) * float64(app.Width))
+	app.MousePixelY = int32(ypos / float64(app.windowHeight) * float64(app.Height))
+	if app.MouseButtonAction == 1 && app.Dragging == false {
+		if math.Abs(float64(app.MouseX)-float64(app.DragStartX)) > float64(minDragPixels) || math.Abs(float64(app.MouseY)-float64(app.DragStartY)) > float64(minDragPixels) {
+			app.Dragging = true
+			app.readSelection = readDragPos
+		}
+	}
 }
 
 func (app *App) MouseClick(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
 	if action == 1 {
-		app.readSelection = true
+		app.MouseButtonAction = 1
+		app.DragStartX = app.MouseX
+		app.DragStartY = app.MouseY
+	} else {
+		app.MouseButtonAction = 0
+		app.readSelection = readMousePos
+	}
+}
+
+func (app *App) CompleteDrag() {
+	if app.MouseButtonAction == 0 {
+		app.Dragging = false
+	}
+}
+
+func (app *App) SetCursorShape(shapeIndex int) {
+	app.HideCursorShape()
+	shape := shapes.Shapes[shapeIndex]
+	w := shape.Image.Bounds().Dx()
+	h := shape.Image.Bounds().Dy()
+	init := true
+	app.cursorPanel = app.Ui.AddBg(int(app.MousePixelX)-w/2, int(app.MousePixelY)-h/2, w, h, color.Transparent, func(panel *Panel) bool {
+		app.Ui.MovePanel(app.cursorPanel, int(app.MousePixelX)-w/2, int(app.MousePixelY)-h/2)
+		if init {
+			init = false
+			panel.Clear()
+			draw.Draw(panel.Rgba, image.Rect(0, 0, w, h), shape.Image, image.Point{0, 0}, draw.Over)
+			return true
+		}
+		return false
+	})
+}
+
+func (app *App) HideCursorShape() {
+	if app.cursorPanel != nil {
+		app.Ui.Remove(app.cursorPanel)
 	}
 }
 
@@ -357,6 +414,7 @@ func (app *App) Run() {
 	last := glfw.GetTime()
 	var delta float64
 	selection := [4]byte{}
+	mouseVector := mgl32.Vec2{0, 0}
 	for !app.Window.ShouldClose() {
 		// reduce fan noise / run at target fps
 		last, delta = app.Sleep(last)
@@ -366,26 +424,55 @@ func (app *App) Run() {
 
 		app.incrFade(last)
 
-		if app.readSelection {
+		if app.readSelection != dontReadPos {
 			// mouse click selection
 			app.frameBuffer.Enable(app.Width, app.Height)
 			app.View.Draw(delta, true)
 			app.frameBuffer.Draw(app.windowWidthDpi, app.windowHeightDpi, app.fade)
-			mx := float32(app.MouseX)*app.dpiX + 0.5
-			my := float32(app.MouseY)*app.dpiY + 0.5
+			mouseVector[0] = float32(app.MouseX)
+			mouseVector[1] = float32(app.MouseY)
+			if app.readSelection == readDragPos {
+				mouseVector[0] = float32(app.DragStartX)
+				mouseVector[1] = float32(app.DragStartY)
+			}
 			gl.ReadPixels(
-				int32(mx),
-				int32(float32(app.pxHeight)-my),
+				int32(mouseVector[0]*app.dpiX+0.5),
+				int32(float32(app.pxHeight)-(mouseVector[1]*app.dpiY+0.5)),
 				1, 1,
 				gl.RGBA, gl.UNSIGNED_BYTE,
 				gl.Ptr(&selection[0]),
 			)
-			app.View.SetClick(selection[:])
-			app.readSelection = false
+
+			vx := int(selection[0])
+			vy := int(selection[1])
+			vz := int(selection[2])
+			if app.readSelection == readMousePos && app.Dragging {
+				// drag drop: find closest position to mouse
+				if wx, wy, wz, ok := app.View.GetClosestSurfacePoint(mouseVector, vx, vy, vz, app.windowWidth, app.windowHeight); ok {
+					app.View.SetClick(wx, wy, wz)
+				}
+			} else {
+				// click: use exact mouse location
+				cancelDrag := false
+				if app.Dragging {
+					blockPos := app.View.getShapeAt(vx, vy, vz)
+					if blockPos != nil && blockPos.pos.Block >= 0 {
+						shape := shapes.Shapes[blockPos.pos.Block-1]
+						cancelDrag = !shape.IsDraggable
+					}
+				}
+				if cancelDrag {
+					app.Dragging = false
+				} else {
+					wx, wy, wz := app.View.toWorldPos(vx, vy, vz)
+					app.View.SetClick(wx, wy, wz)
+				}
+			}
+			app.readSelection = dontReadPos
 		}
 
 		// handle events
-		app.Game.Events(delta, app.fadeDir)
+		app.Game.Events(delta, app.fadeDir, app.MousePixelX, app.MousePixelY)
 
 		app.frameBuffer.Enable(app.Width, app.Height)
 		app.View.Draw(delta, false)

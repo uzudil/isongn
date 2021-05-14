@@ -382,11 +382,40 @@ func didClick(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 func getClick(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	app := ctx.App["app"].(*gfx.App)
 	n := app.View.GetClick()
-	r := make([]interface{}, 3)
+	r := make([]interface{}, 5)
 	r[0] = float64(n[0])
 	r[1] = float64(n[1])
 	r[2] = float64(n[2])
+	r[3] = app.Dragging
+	r[4] = app.MouseButtonAction == 1
+	app.CompleteDrag()
 	return &r, nil
+}
+
+func findTop(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	worldX := int(arg[0].(float64))
+	worldY := int(arg[1].(float64))
+	shape := shapes.Shapes[shapes.Names[arg[2].(string)]]
+	app := ctx.App["app"].(*gfx.App)
+	z := app.View.FindTop(worldX, worldY, shape)
+	if z < app.View.GetMaxZ() {
+		return float64(z), nil
+	} else {
+		return float64(0), nil
+	}
+}
+
+func setCursorShape(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	shapeIndex := shapes.Names[arg[0].(string)]
+	app := ctx.App["app"].(*gfx.App)
+	app.SetCursorShape(shapeIndex)
+	return nil, nil
+}
+
+func clearCursorShape(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	app := ctx.App["app"].(*gfx.App)
+	app.HideCursorShape()
+	return nil, nil
 }
 
 var constants map[string]interface{} = map[string]interface{}{
@@ -564,6 +593,9 @@ func InitScript() {
 	bscript.AddBuiltin("setPathThroughShapes", setPathThroughShapes)
 	bscript.AddBuiltin("didClick", didClick)
 	bscript.AddBuiltin("getClick", getClick)
+	bscript.AddBuiltin("findTop", findTop)
+	bscript.AddBuiltin("setCursorShape", setCursorShape)
+	bscript.AddBuiltin("clearCursorShape", clearCursorShape)
 	for k, v := range constants {
 		bscript.AddConstant(k, v)
 	}

@@ -61,11 +61,13 @@ type Shape struct {
 	BreatheEnabled bool
 	NoSupport      bool
 	IsExtra        bool
+	IsDraggable    bool
 }
 
 var Shapes []*Shape
 var Names map[string]int = map[string]int{}
 var Images []image.Image
+var UiImages map[string]image.Image = map[string]image.Image{}
 
 // some pre-defined animations
 const ANIMATION_MOVE = 0
@@ -105,9 +107,42 @@ func InitShapes(gameDir string, data []map[string]interface{}) error {
 			name := shapeDef["name"].(string)
 			appendShape(index, name, shapeDef, imageIndex, img, shapeMeta)
 		}
+		if imagesI, ok := block["images"]; ok {
+			images := imagesI.([]interface{})
+			for _, imageInfo := range images {
+				imageDef := imageInfo.(map[string]interface{})
+				appendUiImage(imageDef, img, shapeMeta)
+			}
+		}
 	}
 	fmt.Printf("Loaded %d shapes.\n", len(Shapes))
 	return nil
+}
+
+func appendUiImage(imageDef map[string]interface{}, img image.Image, shapeMeta *ShapeMeta) {
+	// size
+	sizeI := imageDef["size"].([]interface{})
+	size := [2]float32{float32(sizeI[0].(float64)), float32(sizeI[1].(float64))}
+
+	// pixel bounding box
+	posI := imageDef["pos"].([]interface{})
+	px := float32(posI[0].(float64)) * shapeMeta.DpiMultiplier
+	py := float32(posI[1].(float64)) * shapeMeta.DpiMultiplier
+	pw := size[0] * shapeMeta.DpiMultiplier
+	ph := size[1] * shapeMeta.DpiMultiplier
+
+	// create a half-size thumbnail
+	rgba := image.NewRGBA(image.Rect(0, 0, int(pw), int(ph)))
+	draw.Draw(rgba, image.Rect(0, 0, int(pw), int(ph)), img, image.Point{int(px), int(py)}, draw.Src)
+	w := uint(float32(rgba.Bounds().Max.X) / shapeMeta.DpiMultiplier)
+	h := uint(float32(rgba.Bounds().Max.Y) / shapeMeta.DpiMultiplier)
+	resized := resize.Resize(w, h, rgba, resize.NearestNeighbor)
+	uiImage := image.NewRGBA(resized.Bounds())
+	draw.Draw(uiImage, resized.Bounds(), resized, image.ZP, draw.Src)
+
+	name := imageDef["name"].(string)
+	UiImages[name] = uiImage
+	fmt.Printf("\tStored UI Image: %s\n", name)
 }
 
 func appendShape(index int, name string, shapeDef map[string]interface{}, imageIndex int, img image.Image, shapeMeta *ShapeMeta) {
@@ -219,6 +254,10 @@ func (shape *Shape) addExtras(shapeDef map[string]interface{}) {
 	// extra
 	if extra, ok := shapeDef["extra"].(bool); ok {
 		shape.IsExtra = extra
+	}
+	// drag
+	if drag, ok := shapeDef["drag"].(bool); ok {
+		shape.IsDraggable = drag
 	}
 }
 

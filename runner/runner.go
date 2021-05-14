@@ -28,27 +28,28 @@ type PositionMessage struct {
 }
 
 type Runner struct {
-	app                *gfx.App
-	ctx                *bscript.Context
-	eventsCall         *bscript.Variable
-	deltaArg           *bscript.Value
-	fadeDirArg         *bscript.Value
-	sectionLoadCall    *bscript.Variable
-	hourArg            *bscript.Value
-	hourCall           *bscript.Variable
-	sectionLoadXArg    *bscript.Value
-	sectionLoadYArg    *bscript.Value
-	sectionLoadDataArg *bscript.Value
-	sectionSaveCall    *bscript.Variable
-	sectionSaveXArg    *bscript.Value
-	sectionSaveYArg    *bscript.Value
-	messages           map[int]*Message
-	messageIndex       int
-	updateOverlay      bool
-	Calendar           *Calendar
-	positionMessages   []*PositionMessage
-	daylight           [24][3]float32
-	lastHour           int
+	app                  *gfx.App
+	ctx                  *bscript.Context
+	eventsCall           *bscript.Variable
+	deltaArg             *bscript.Value
+	fadeDirArg           *bscript.Value
+	mouseXArg, mouseYArg *bscript.Value
+	sectionLoadCall      *bscript.Variable
+	hourArg              *bscript.Value
+	hourCall             *bscript.Variable
+	sectionLoadXArg      *bscript.Value
+	sectionLoadYArg      *bscript.Value
+	sectionLoadDataArg   *bscript.Value
+	sectionSaveCall      *bscript.Variable
+	sectionSaveXArg      *bscript.Value
+	sectionSaveYArg      *bscript.Value
+	messages             map[int]*Message
+	messageIndex         int
+	updateOverlay        bool
+	Calendar             *Calendar
+	positionMessages     []*PositionMessage
+	daylight             [24][3]float32
+	lastHour             int
 }
 
 func NewRunner() *Runner {
@@ -117,7 +118,9 @@ func (runner *Runner) Init(app *gfx.App, config map[string]interface{}) {
 
 	runner.deltaArg = &bscript.Value{Number: &bscript.SignedNumber{}}
 	runner.fadeDirArg = &bscript.Value{Number: &bscript.SignedNumber{}}
-	runner.eventsCall = util.NewFunctionCall("events", runner.deltaArg, runner.fadeDirArg)
+	runner.mouseXArg = &bscript.Value{Number: &bscript.SignedNumber{}}
+	runner.mouseYArg = &bscript.Value{Number: &bscript.SignedNumber{}}
+	runner.eventsCall = util.NewFunctionCall("events", runner.deltaArg, runner.fadeDirArg, runner.mouseXArg, runner.mouseYArg)
 
 	runner.hourArg = &bscript.Value{Number: &bscript.SignedNumber{}}
 	runner.hourCall = util.NewFunctionCall("onHour", runner.hourArg)
@@ -142,11 +145,13 @@ func (runner *Runner) Name() string {
 	return "runner"
 }
 
-func (runner *Runner) Events(delta float64, fadeDir int) {
+func (runner *Runner) Events(delta float64, fadeDir int, mouseX, mouseY int32) {
 	runner.Calendar.Incr(delta)
 	runner.timeoutMessages(delta)
 	runner.deltaArg.Number.Number = delta
 	runner.fadeDirArg.Number.Number = float64(fadeDir)
+	runner.mouseXArg.Number.Number = float64(mouseX)
+	runner.mouseYArg.Number.Number = float64(mouseY)
 	runner.eventsCall.Evaluate(runner.ctx)
 }
 

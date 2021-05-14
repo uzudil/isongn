@@ -109,7 +109,7 @@ func (e *Editor) isMoveKey() (int, int, bool) {
 	return 0, 0, false
 }
 
-func (e *Editor) Events(delta float64, fadeDir int) {
+func (e *Editor) Events(delta float64, fadeDir int, mouseX, mouseY int32) {
 
 	if e.app.Loader.X != e.lastX || e.app.Loader.Y != e.lastY || e.updateCursor {
 		// e.Z = e.findTop(e.app.Loader.X, e.app.Loader.Y)

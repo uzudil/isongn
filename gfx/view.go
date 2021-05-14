@@ -125,11 +125,10 @@ func newBlockPos(x, y, z int) *BlockPos {
 	}
 }
 
-func (view *View) SetClick(pos []byte) {
-	x, y, z := view.toWorldPos(int(pos[0]), int(pos[1]), int(pos[2]))
-	view.lastClick[0] = x
-	view.lastClick[1] = y
-	view.lastClick[2] = z
+func (view *View) SetClick(worldX, worldY, worldZ int) {
+	view.lastClick[0] = worldX
+	view.lastClick[1] = worldY
+	view.lastClick[2] = worldZ
 	view.DidClick = true
 }
 
@@ -140,6 +139,10 @@ func (view *View) GetClick() [3]int {
 
 func (view *View) SetMaxZ(z int) {
 	view.maxZ = z
+}
+
+func (view *View) GetMaxZ() int {
+	return view.maxZ
 }
 
 func (view *View) SetUnderShape(shape *shapes.Shape) {
@@ -666,4 +669,37 @@ func (view *View) SetDaylight(r, g, b, a float32) {
 	view.daylight[1] = g / 255
 	view.daylight[2] = b / 255
 	view.daylight[3] = 1
+}
+
+func (view *View) GetClosestSurfacePoint(mouseVector mgl32.Vec2, viewX, viewY, viewZ int, windowWidth, windowHeight int) (int, int, int, bool) {
+	screenVector := mgl32.Vec2{}
+	blockPos := view.getShapeAt(viewX, viewY, viewZ)
+	if blockPos != nil && blockPos.pos.Block >= 0 {
+		shape := shapes.Shapes[blockPos.pos.Block-1]
+		dist := float64(-1)
+		wx := blockPos.worldX
+		wy := blockPos.worldY
+		wz := viewZ + int(shape.Size[2])
+		for x := 0; x < int(shape.Size[0]); x++ {
+			for y := 0; y < int(shape.Size[1]); y++ {
+				sx, sy, _ := view.toScreenPos(blockPos.worldX+x, blockPos.worldY+y, wz, windowWidth, windowHeight)
+				screenVector[0] = float32(sx)
+				screenVector[1] = float32(sy)
+
+				// if distance between [mouseX, mouseY] and [sx,sy] is closer, then use this point
+				dx := float64(screenVector[0] - mouseVector[0])
+				dy := float64(screenVector[1] - mouseVector[1])
+				d := math.Sqrt(dx*dx + dy*dy)
+				// fmt.Printf("\tdelta=%d,%d screen=%v vs %v distance=%.2f\n", x, y, screenVector, mouseVector, d)
+				if dist < 0 || d < dist {
+					// fmt.Printf("\t\tcloser!\n")
+					wx = blockPos.worldX + x
+					wy = blockPos.worldY + y
+					dist = d
+				}
+			}
+		}
+		return wx, wy, wz, true
+	}
+	return 0, 0, 0, false
 }
