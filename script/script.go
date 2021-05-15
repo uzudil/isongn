@@ -382,12 +382,14 @@ func didClick(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 func getClick(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	app := ctx.App["app"].(*gfx.App)
 	n := app.View.GetClick()
-	r := make([]interface{}, 5)
+	r := make([]interface{}, 7)
 	r[0] = float64(n[0])
 	r[1] = float64(n[1])
 	r[2] = float64(n[2])
 	r[3] = app.Dragging
 	r[4] = app.MouseButtonAction == 1
+	r[5] = app.DragAction
+	r[6] = float64(app.DragIndex)
 	app.CompleteDrag()
 	return &r, nil
 }
@@ -415,6 +417,42 @@ func setCursorShape(ctx *bscript.Context, arg ...interface{}) (interface{}, erro
 func clearCursorShape(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	app := ctx.App["app"].(*gfx.App)
 	app.HideCursorShape()
+	return nil, nil
+}
+
+func raisePanel(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	name := arg[0].(string)
+	imageName := arg[1].(string)
+	runner := ctx.App["runner"].(*runner.Runner)
+	runner.RaisePanel(name, imageName)
+	return nil, nil
+}
+
+func closeTopPanel(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	runner := ctx.App["runner"].(*runner.Runner)
+	runner.CloseTopPanel()
+	return nil, nil
+}
+
+func isOverPanel(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	name := arg[0].(string)
+	runner := ctx.App["runner"].(*runner.Runner)
+	r := make([]interface{}, 2)
+	if x, y, ok := runner.IsOverPanel(name); ok {
+		r[0] = float64(x)
+		r[1] = float64(y)
+	} else {
+		r[0] = float64(-1)
+		r[1] = float64(-1)
+	}
+	return &r, nil
+}
+
+func updatePanel(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	name := arg[0].(string)
+	contents := arg[1].(*[]interface{})
+	runner := ctx.App["runner"].(*runner.Runner)
+	runner.UpdatePanel(name, contents)
 	return nil, nil
 }
 
@@ -596,6 +634,10 @@ func InitScript() {
 	bscript.AddBuiltin("findTop", findTop)
 	bscript.AddBuiltin("setCursorShape", setCursorShape)
 	bscript.AddBuiltin("clearCursorShape", clearCursorShape)
+	bscript.AddBuiltin("raisePanel", raisePanel)
+	bscript.AddBuiltin("closeTopPanel", closeTopPanel)
+	bscript.AddBuiltin("isOverPanel", isOverPanel)
+	bscript.AddBuiltin("updatePanel", updatePanel)
 	for k, v := range constants {
 		bscript.AddConstant(k, v)
 	}

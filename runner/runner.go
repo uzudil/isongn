@@ -2,12 +2,15 @@ package runner
 
 import (
 	"fmt"
+	"image"
 	"image/color"
+	"image/draw"
 	"path/filepath"
 	"strconv"
 
 	"github.com/uzudil/bscript/bscript"
 	"github.com/uzudil/isongn/gfx"
+	"github.com/uzudil/isongn/shapes"
 	"github.com/uzudil/isongn/util"
 	"github.com/uzudil/isongn/world"
 )
@@ -25,6 +28,18 @@ type PositionMessage struct {
 	ttl                    float64
 	ui                     *gfx.Panel
 	init                   bool
+}
+
+type PanelControl interface {
+	render(*gfx.Panel)
+	isInside(x, y int) bool
+}
+
+type NamedPanel struct {
+	name     string
+	panel    *gfx.Panel
+	contents []PanelControl
+	update   bool
 }
 
 type Runner struct {
@@ -50,6 +65,7 @@ type Runner struct {
 	positionMessages     []*PositionMessage
 	daylight             [24][3]float32
 	lastHour             int
+	panels               []*NamedPanel
 }
 
 func NewRunner() *Runner {
@@ -61,6 +77,7 @@ func NewRunner() *Runner {
 		messages:         map[int]*Message{},
 		positionMessages: []*PositionMessage{},
 		daylight:         daylight,
+		panels:           []*NamedPanel{},
 	}
 }
 
@@ -270,4 +287,115 @@ func (runner *Runner) MinsChange(mins, hours, day, month, year int) {
 		runner.hourArg.Number.Number = float64(hours)
 		runner.hourCall.Evaluate(runner.ctx)
 	}
+}
+
+func (runner *Runner) RaisePanel(name, imageName string) {
+	for _, p := range runner.panels {
+		if p.name == name {
+			runner.app.Ui.Raise(p.panel)
+			return
+		}
+	}
+	bg := shapes.UiImages[imageName]
+	w := bg.Bounds().Dx()
+	h := bg.Bounds().Dy()
+	x := (runner.app.Width - w) / 2
+	y := (runner.app.Height - h) / 2
+	p := &NamedPanel{
+		name:   name,
+		update: true,
+	}
+	p.panel = runner.app.Ui.AddBg(x, y, w, h, color.Transparent, func(panel *gfx.Panel) bool {
+		if p.update {
+			p.update = false
+			panel.Clear()
+			draw.Draw(panel.Rgba, image.Rect(0, 0, w, h), bg, image.Point{0, 0}, draw.Over)
+			for _, c := range p.contents {
+				c.render(panel)
+			}
+			return true
+		}
+		return false
+	})
+	p.panel.Draggable = true
+	runner.panels = append(runner.panels, p)
+}
+
+func (runner *Runner) CloseTopPanel() {
+	panel := runner.app.Ui.GetTop()
+	if panel != nil {
+		for i, p := range runner.panels {
+			if p.panel == panel {
+				runner.panels[i] = runner.panels[len(runner.panels)-1]
+				runner.panels = runner.panels[0 : len(runner.panels)-1]
+				runner.app.Ui.Remove(panel)
+			}
+		}
+	}
+}
+
+func (runner *Runner) IsOverPanel(name string) (int, int, bool) {
+	p, offsX, offsY := runner.app.PanelAtMouse()
+	for _, np := range runner.panels {
+		if np.panel == p {
+			return offsX, offsY, true
+		}
+	}
+	return 0, 0, false
+}
+
+type UiImageControl struct {
+	shape *shapes.Shape
+	x, y  int
+}
+
+func (c *UiImageControl) render(panel *gfx.Panel) {
+	icon := c.shape.Image
+	iconW := icon.Bounds().Dx()
+	iconH := icon.Bounds().Dy()
+	draw.Draw(panel.Rgba, image.Rect(c.x, c.y, c.x+iconW, c.y+iconH), icon, image.Point{0, 0}, draw.Over)
+}
+
+func (c *UiImageControl) isInside(x, y int) bool {
+	icon := c.shape.Image
+	w := icon.Bounds().Dx()
+	h := icon.Bounds().Dy()
+	return x >= c.x && x < c.x+w && y >= c.y && y < c.y+h
+}
+
+func (runner *Runner) UpdatePanel(name string, contents *[]interface{}) {
+	for _, p := range runner.panels {
+		if p.name == name {
+			p.contents = make([]PanelControl, len(*contents))
+			for i := range *contents {
+				m := (*contents)[i].(map[string]interface{})
+				t := m["type"].(string)
+				switch t {
+				case "uiImage":
+					p.contents[i] = &UiImageControl{
+						shape: shapes.Shapes[shapes.Names[m["name"].(string)]],
+						x:     int(m["x"].(float64)),
+						y:     int(m["y"].(float64)),
+					}
+				default:
+					panic(fmt.Sprintf("Unknown runner ui component: %s", t))
+				}
+			}
+			p.update = true
+		}
+	}
+}
+
+func (runner *Runner) DragFromUi(pixelX, pixelY int) (string, int) {
+	panel, offsX, offsY := runner.app.Ui.PanelAt(pixelX, pixelY)
+	for _, p := range runner.panels {
+		if p.panel == panel {
+			for index, c := range p.contents {
+				if c.isInside(offsX, offsY) {
+					return p.name, index
+				}
+			}
+		}
+	}
+	return "", 0
 }

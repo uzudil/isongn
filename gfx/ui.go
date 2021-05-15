@@ -30,6 +30,7 @@ type Panel struct {
 	model      mgl32.Mat4
 	vbo        uint32
 	renderer   func(*Panel) bool
+	Draggable  bool
 }
 
 func InitUi(screenWidth, screenHeight int) *Ui {
@@ -80,7 +81,36 @@ func (ui *Ui) Remove(panel *Panel) {
 			return
 		}
 	}
-	print("Couldn't find panel in ui list!")
+	print("Couldn't find panel in ui list!\n")
+}
+
+func (ui *Ui) Raise(panel *Panel) {
+	for index, p := range ui.panels {
+		if p == panel && index < len(ui.panels)-1 {
+			ui.panels[index], ui.panels[len(ui.panels)-1] = ui.panels[len(ui.panels)-1], ui.panels[index]
+			return
+		}
+	}
+}
+
+func (ui *Ui) GetTop() *Panel {
+	if len(ui.panels) > 0 {
+		return ui.panels[len(ui.panels)-1]
+	}
+	return nil
+}
+
+func (ui *Ui) PanelAt(x, y int) (*Panel, int, int) {
+	for i := len(ui.panels) - 1; i >= 0; i-- {
+		p := ui.panels[i]
+		if p.Draggable == false {
+			continue
+		}
+		if p.X <= x && p.X+p.W > x && p.Y <= y && p.Y+p.H > y {
+			return p, x - p.X, y - p.Y
+		}
+	}
+	return nil, 0, 0
 }
 
 func (ui *Ui) NewPanel(x, y, w, h int, bg color.Color, renderer func(*Panel) bool) *Panel {
@@ -92,6 +122,7 @@ func (ui *Ui) NewPanel(x, y, w, h int, bg color.Color, renderer func(*Panel) boo
 		Background: bg,
 		Visible:    true,
 		renderer:   renderer,
+		Draggable:  false,
 	}
 
 	panel.Rgba = image.NewRGBA(image.Rect(0, 0, w, h))
@@ -171,7 +202,9 @@ func (ui *Ui) Draw() {
 	gl.Disable(gl.DEPTH_TEST)
 	gl.ClearColor(0, 0, 0, 0)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-	gl.Disable(gl.BLEND)
+	// gl.Disable(gl.BLEND)
+	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+	gl.Enable(gl.BLEND)
 	gl.BindVertexArray(ui.vao)
 	gl.EnableVertexAttribArray(ui.vertAttrib)
 	gl.EnableVertexAttribArray(ui.texCoordAttrib)

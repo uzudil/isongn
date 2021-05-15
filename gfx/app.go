@@ -32,6 +32,7 @@ type Game interface {
 	Name() string
 	Events(delta float64, fadeDir int, mouseX, mouseY int32)
 	GetZ() int
+	DragFromUi(pixelX, pixelY int) (string, int)
 }
 
 type KeyPress struct {
@@ -59,35 +60,39 @@ type AppConfig struct {
 }
 
 type App struct {
-	Game                            Game
-	Font                            *Font
-	Config                          *AppConfig
-	Window                          *glfw.Window
-	KeyState                        map[glfw.Key]*KeyPress
-	targetFps                       float64
-	lastUpdate                      float64
-	nbFrames                        int
-	View                            *View
-	Ui                              *Ui
-	Dir                             string
-	Loader                          *world.Loader
-	Width, Height                   int
-	windowWidth, windowHeight       int
-	windowWidthDpi, windowHeightDpi int
-	dpiX, dpiY                      float32
-	pxWidth, pxHeight               int
-	frameBuffer, uiFrameBuffer      *FrameBuffer
-	fadeDir                         int
-	fadeTimer                       float64
-	fadeFx                          func()
-	fade                            float32
-	MouseX, MouseY                  int32
-	MousePixelX, MousePixelY        int32
-	DragStartX, DragStartY          int32
-	readSelection                   int
-	MouseButtonAction               int
-	Dragging                        bool
-	cursorPanel                     *Panel
+	Game                                 Game
+	Font                                 *Font
+	Config                               *AppConfig
+	Window                               *glfw.Window
+	KeyState                             map[glfw.Key]*KeyPress
+	targetFps                            float64
+	lastUpdate                           float64
+	nbFrames                             int
+	View                                 *View
+	Ui                                   *Ui
+	Dir                                  string
+	Loader                               *world.Loader
+	Width, Height                        int
+	windowWidth, windowHeight            int
+	windowWidthDpi, windowHeightDpi      int
+	dpiX, dpiY                           float32
+	pxWidth, pxHeight                    int
+	frameBuffer, uiFrameBuffer           *FrameBuffer
+	fadeDir                              int
+	fadeTimer                            float64
+	fadeFx                               func()
+	fade                                 float32
+	MouseX, MouseY                       int32
+	MousePixelX, MousePixelY             int32
+	DragStartX, DragStartY               int32
+	readSelection                        int
+	MouseButtonAction                    int
+	Dragging                             bool
+	DraggedPanel                         *Panel
+	DraggedPanelOffsX, DraggedPanelOffsY int
+	DragAction                           string
+	DragIndex                            int
+	cursorPanel                          *Panel
 }
 
 func NewApp(game Game, gameDir string, windowWidth, windowHeight int, targetFps float64) *App {
@@ -328,17 +333,44 @@ func (app *App) MouseScroll(w *glfw.Window, xoffs, yoffs float64) {
 	app.View.Zoom(yoffs)
 }
 
+func (app *App) PanelAtMouse() (*Panel, int, int) {
+	return app.Ui.PanelAt(int(app.MousePixelX), int(app.MousePixelY))
+}
+
 func (app *App) MousePos(w *glfw.Window, xpos float64, ypos float64) {
 	app.MouseX = int32(xpos)
 	app.MouseY = int32(ypos)
 	app.MousePixelX = int32(xpos / float64(app.windowWidth) * float64(app.Width))
 	app.MousePixelY = int32(ypos / float64(app.windowHeight) * float64(app.Height))
-	if app.MouseButtonAction == 1 && app.Dragging == false {
-		if math.Abs(float64(app.MouseX)-float64(app.DragStartX)) > float64(minDragPixels) || math.Abs(float64(app.MouseY)-float64(app.DragStartY)) > float64(minDragPixels) {
-			app.Dragging = true
-			app.readSelection = readDragPos
+	if app.cursorPanel != nil {
+		app.Ui.MovePanel(app.cursorPanel, int(app.MousePixelX), int(app.MousePixelY))
+	}
+	if app.DraggedPanel != nil {
+		app.Ui.MovePanel(app.DraggedPanel, int(app.MousePixelX)-app.DraggedPanelOffsX, int(app.MousePixelY)-app.DraggedPanelOffsY)
+	} else {
+		if app.MouseButtonAction == 1 && app.Dragging == false {
+			if math.Abs(float64(app.MouseX)-float64(app.DragStartX)) > float64(minDragPixels) || math.Abs(float64(app.MouseY)-float64(app.DragStartY)) > float64(minDragPixels) {
+				app.Dragging = true
+				pixelX, pixelY := app.toPixelCoords(app.DragStartX, app.DragStartY)
+				app.DragAction, app.DragIndex = app.Game.DragFromUi(pixelX, pixelY)
+				if app.DragAction != "" {
+					// drag from ui
+					app.View.SetClick(0, 0, 0)
+				} else {
+					// drag the ui
+					app.DraggedPanel, app.DraggedPanelOffsX, app.DraggedPanelOffsY = app.Ui.PanelAt(pixelX, pixelY)
+					if app.DraggedPanel == nil {
+						// drag from map
+						app.readSelection = readDragPos
+					}
+				}
+			}
 		}
 	}
+}
+
+func (app *App) toPixelCoords(windowX, windowY int32) (int, int) {
+	return int(float32(windowX) * float32(app.Width) / float32(app.windowWidth)), int(float32(windowY) * float32(app.Height) / float32(app.windowHeight))
 }
 
 func (app *App) MouseClick(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
@@ -348,7 +380,12 @@ func (app *App) MouseClick(w *glfw.Window, button glfw.MouseButton, action glfw.
 		app.DragStartY = app.MouseY
 	} else {
 		app.MouseButtonAction = 0
-		app.readSelection = readMousePos
+		if app.DraggedPanel == nil {
+			app.readSelection = readMousePos
+		} else {
+			app.DraggedPanel = nil
+			app.Dragging = false
+		}
 	}
 }
 
@@ -365,7 +402,6 @@ func (app *App) SetCursorShape(shapeIndex int) {
 	h := shape.Image.Bounds().Dy()
 	init := true
 	app.cursorPanel = app.Ui.AddBg(int(app.MousePixelX)-w/2, int(app.MousePixelY)-h/2, w, h, color.Transparent, func(panel *Panel) bool {
-		app.Ui.MovePanel(app.cursorPanel, int(app.MousePixelX)-w/2, int(app.MousePixelY)-h/2)
 		if init {
 			init = false
 			panel.Clear()
@@ -379,6 +415,7 @@ func (app *App) SetCursorShape(shapeIndex int) {
 func (app *App) HideCursorShape() {
 	if app.cursorPanel != nil {
 		app.Ui.Remove(app.cursorPanel)
+		app.cursorPanel = nil
 	}
 }
 

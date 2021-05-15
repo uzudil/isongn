@@ -567,18 +567,20 @@ func (view *View) Draw(delta float64, selectMode bool) {
 				blockPos.Draw(view, view.blocks[blockPos.pos.Block-1], -1, shader)
 			}
 
-			modelZ := blockPos.model.At(2, 3)
-			for i := range blockPos.pos.Extras {
-				// show extras slightly on top of each other
-				blockPos.model.Set(2, 3, modelZ+float32(i)*0.01)
-				blockPos.Draw(view, view.blocks[blockPos.pos.Extras[i]], i, shader)
-			}
+			if selectMode == false {
+				modelZ := blockPos.model.At(2, 3)
+				for i := range blockPos.pos.Extras {
+					// show extras slightly on top of each other
+					blockPos.model.Set(2, 3, modelZ+float32(i)*0.01)
+					blockPos.Draw(view, view.blocks[blockPos.pos.Extras[i]], i, shader)
+				}
 
-			if blockPos.pos.Edge > 0 {
-				blockPos.model.Set(2, 3, float32(z)+0.01)
-				blockPos.Draw(view, view.blocks[blockPos.pos.Edge-1], -1, shader)
+				if blockPos.pos.Edge > 0 {
+					blockPos.model.Set(2, 3, float32(z)+0.01)
+					blockPos.Draw(view, view.blocks[blockPos.pos.Edge-1], -1, shader)
+				}
+				blockPos.model.Set(2, 3, modelZ)
 			}
-			blockPos.model.Set(2, 3, modelZ)
 		}
 	})
 	if view.Cursor.block != nil {

@@ -410,3 +410,7 @@ func (e *Editor) SectionLoad(x, y int, data map[string]interface{}) {
 func (e *Editor) SectionSave(x, y int) map[string]interface{} {
 	return map[string]interface{}{}
 }
+
+func (e *Editor) DragFromUi(pixelX, pixelY int) (string, int) {
+	return "", 0
+}
