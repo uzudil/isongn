@@ -381,6 +381,10 @@ func (app *App) MouseClick(w *glfw.Window, button glfw.MouseButton, action glfw.
 	} else {
 		app.MouseButtonAction = 0
 		if app.DraggedPanel == nil {
+			if app.Dragging == false {
+				// click on a ui item?
+				app.DragAction, app.DragIndex = app.Game.DragFromUi(int(app.MousePixelX), int(app.MousePixelY))
+			}
 			app.readSelection = readMousePos
 		} else {
 			app.DraggedPanel = nil

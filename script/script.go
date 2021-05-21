@@ -448,6 +448,21 @@ func isOverPanel(ctx *bscript.Context, arg ...interface{}) (interface{}, error) 
 	return &r, nil
 }
 
+func getOverPanel(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	runner := ctx.App["runner"].(*runner.Runner)
+	r := make([]interface{}, 3)
+	if name, x, y, ok := runner.GetOverPanel(); ok {
+		r[0] = name
+		r[1] = float64(x)
+		r[2] = float64(y)
+	} else {
+		r[0] = nil
+		r[1] = float64(-1)
+		r[2] = float64(-1)
+	}
+	return &r, nil
+}
+
 func updatePanel(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	name := arg[0].(string)
 	contents := arg[1].(*[]interface{})
@@ -637,6 +652,7 @@ func InitScript() {
 	bscript.AddBuiltin("raisePanel", raisePanel)
 	bscript.AddBuiltin("closeTopPanel", closeTopPanel)
 	bscript.AddBuiltin("isOverPanel", isOverPanel)
+	bscript.AddBuiltin("getOverPanel", getOverPanel)
 	bscript.AddBuiltin("updatePanel", updatePanel)
 	for k, v := range constants {
 		bscript.AddConstant(k, v)

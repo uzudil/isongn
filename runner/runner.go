@@ -299,8 +299,8 @@ func (runner *Runner) RaisePanel(name, imageName string) {
 	bg := shapes.UiImages[imageName]
 	w := bg.Bounds().Dx()
 	h := bg.Bounds().Dy()
-	x := (runner.app.Width - w) / 2
-	y := (runner.app.Height - h) / 2
+	x := (len(runner.panels) * 20) % (runner.app.Width - w)
+	y := (len(runner.panels) * 20) % (runner.app.Height - h)
 	p := &NamedPanel{
 		name:   name,
 		update: true,
@@ -337,11 +337,21 @@ func (runner *Runner) CloseTopPanel() {
 func (runner *Runner) IsOverPanel(name string) (int, int, bool) {
 	p, offsX, offsY := runner.app.PanelAtMouse()
 	for _, np := range runner.panels {
-		if np.panel == p {
+		if np.panel == p && np.name == name {
 			return offsX, offsY, true
 		}
 	}
 	return 0, 0, false
+}
+
+func (runner *Runner) GetOverPanel() (string, int, int, bool) {
+	p, offsX, offsY := runner.app.PanelAtMouse()
+	for _, np := range runner.panels {
+		if np.panel == p {
+			return np.name, offsX, offsY, true
+		}
+	}
+	return "", 0, 0, false
 }
 
 type UiImageControl struct {
