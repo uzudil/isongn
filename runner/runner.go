@@ -66,6 +66,7 @@ type Runner struct {
 	daylight             [24][3]float32
 	lastHour             int
 	panels               []*NamedPanel
+	panelPos             map[string][2]int
 }
 
 func NewRunner() *Runner {
@@ -78,6 +79,7 @@ func NewRunner() *Runner {
 		positionMessages: []*PositionMessage{},
 		daylight:         daylight,
 		panels:           []*NamedPanel{},
+		panelPos:         map[string][2]int{},
 	}
 }
 
@@ -299,8 +301,15 @@ func (runner *Runner) RaisePanel(name, imageName string) {
 	bg := shapes.UiImages[imageName]
 	w := bg.Bounds().Dx()
 	h := bg.Bounds().Dy()
-	x := (len(runner.panels) * 20) % (runner.app.Width - w)
-	y := (len(runner.panels) * 20) % (runner.app.Height - h)
+	pos, ok := runner.panelPos[name]
+	var x, y int
+	if ok {
+		x = pos[0]
+		y = pos[1]
+	} else {
+		x = (len(runner.panels) * 20) % (runner.app.Width - w)
+		y = (len(runner.panels) * 20) % (runner.app.Height - h)
+	}
 	p := &NamedPanel{
 		name:   name,
 		update: true,
@@ -326,6 +335,7 @@ func (runner *Runner) CloseTopPanel() {
 	if panel != nil {
 		for i, p := range runner.panels {
 			if p.panel == panel {
+				runner.panelPos[p.name] = [2]int{p.panel.X, p.panel.Y}
 				runner.panels[i] = runner.panels[len(runner.panels)-1]
 				runner.panels = runner.panels[0 : len(runner.panels)-1]
 				runner.app.Ui.Remove(panel)
