@@ -61,7 +61,7 @@ type AppConfig struct {
 
 type App struct {
 	Game                                 Game
-	Font                                 *Font
+	Fonts                                []*Font
 	Config                               *AppConfig
 	Window                               *glfw.Window
 	KeyState                             map[glfw.Key]*KeyPress
@@ -112,12 +112,9 @@ func NewApp(game Game, gameDir string, windowWidth, windowHeight int, targetFps 
 		Height:       height,
 		windowWidth:  windowWidth,
 		windowHeight: windowHeight,
+		Fonts:        []*Font{},
 	}
-	font, err := NewFont(filepath.Join(gameDir, getFont(appConfig, game.Name())), getFontSize(appConfig, game.Name()))
-	if err != nil {
-		panic(err)
-	}
-	app.Font = font
+	app.addFonts(appConfig, gameDir, game.Name())
 	app.Dir = initUserdir(appConfig.Name)
 	app.Window = initWindow(windowWidth, windowHeight)
 	app.pxWidth, app.pxHeight = app.Window.GetFramebufferSize()
@@ -132,7 +129,7 @@ func NewApp(game Game, gameDir string, windowWidth, windowHeight int, targetFps 
 	app.Window.SetMouseButtonCallback(app.MouseClick)
 	app.frameBuffer = NewFrameBuffer(int32(width), int32(height), true)
 	app.uiFrameBuffer = NewFrameBuffer(int32(width), int32(height), false)
-	err = shapes.InitShapes(gameDir, appConfig.shapes)
+	err := shapes.InitShapes(gameDir, appConfig.shapes)
 	if err != nil {
 		panic(err)
 	}
@@ -209,28 +206,32 @@ func getResolution(appConfig *AppConfig, mode string) (int, int) {
 	return int(resArray[0].(float64)), int(resArray[1].(float64))
 }
 
-func getFontSize(appConfig *AppConfig, mode string) int {
+func (app *App) addFonts(appConfig *AppConfig, gameDir, mode string) {
 	runtimeConfig, ok := appConfig.runtime[mode]
 	if ok == false {
 		panic("Can't find runtime config")
 	}
-	fontSize, ok := (runtimeConfig.(map[string]interface{}))["fontSize"]
+	fonts, ok := (runtimeConfig.(map[string]interface{}))["fonts"]
 	if ok == false {
-		panic("Can't find fontSize in runtime config")
+		panic("Can't find fonts")
 	}
-	return int(fontSize.(float64))
-}
+	for _, fontBlockI := range fonts.([]interface{}) {
+		fontBlock := fontBlockI.(map[string]interface{})
+		fontSize, ok := fontBlock["fontSize"]
+		if ok == false {
+			panic("Can't find fontSize in runtime config")
+		}
+		fontName, ok := fontBlock["font"]
+		if ok == false {
+			panic("Can't find fontSize in runtime config")
+		}
 
-func getFont(appConfig *AppConfig, mode string) string {
-	runtimeConfig, ok := appConfig.runtime[mode]
-	if ok == false {
-		panic("Can't find runtime config")
+		font, err := NewFont(filepath.Join(gameDir, fontName.(string)), int(fontSize.(float64)))
+		if err != nil {
+			panic(err)
+		}
+		app.Fonts = append(app.Fonts, font)
 	}
-	font, ok := (runtimeConfig.(map[string]interface{}))["font"]
-	if ok == false {
-		panic("Can't find fontSize in runtime config")
-	}
-	return font.(string)
 }
 
 func initUserdir(gameName string) string {

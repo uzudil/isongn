@@ -164,7 +164,7 @@ func (f *Font) Width(fs string, argv ...interface{}) float32 {
 
 		//skip runes that are not in font chacter range
 		if int(runeIndex)-lowChar > len(f.chars) || runeIndex < lowChar {
-			fmt.Printf("%c %d\n", runeIndex, runeIndex)
+			fmt.Printf("CHAR NOT FOUND: %c %d\n", runeIndex, runeIndex)
 			continue
 		}
 
@@ -194,7 +194,7 @@ func (f *Font) Printf(dst draw.Image, fg color.Color, x, y int, fs string, argv 
 
 		//skip runes that are not in font chacter range
 		if int(runeIndex)-int(lowChar) > len(f.chars) || runeIndex < lowChar {
-			fmt.Printf("%c %d\n", runeIndex, runeIndex)
+			fmt.Printf("CHAR NOT FOUND %c %d\n", runeIndex, runeIndex)
 			continue
 		}
 

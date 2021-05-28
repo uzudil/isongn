@@ -375,7 +375,7 @@ func (e *Editor) infoContents(panel *gfx.Panel) bool {
 	if e.infoUpdate {
 		panel.Clear()
 		sx, sy := e.app.Loader.GetSectionPos()
-		e.app.Font.Printf(panel.Rgba, color.Black, 0, 30, "pos=%d,%d,%d section=%d,%d", e.app.Loader.X, e.app.Loader.Y, e.Z, sx, sy)
+		e.app.Fonts[0].Printf(panel.Rgba, color.Black, 0, 30, "pos=%d,%d,%d section=%d,%d", e.app.Loader.X, e.app.Loader.Y, e.Z, sx, sy)
 		e.infoUpdate = false
 		return true
 	}

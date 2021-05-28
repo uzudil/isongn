@@ -272,11 +272,12 @@ func showMessageAt(ctx *bscript.Context, arg ...interface{}) (interface{}, error
 	worldY := int(arg[1].(float64))
 	worldZ := int(arg[2].(float64))
 	message := arg[3].(string)
-	r := uint8(arg[4].(float64))
-	g := uint8(arg[5].(float64))
-	b := uint8(arg[6].(float64))
+	fontIndex := int(arg[4].(float64))
+	r := uint8(arg[5].(float64))
+	g := uint8(arg[6].(float64))
+	b := uint8(arg[7].(float64))
 	runner := ctx.App["runner"].(*runner.Runner)
-	runner.ShowMessageAt(worldX, worldY, worldZ, message, r, g, b)
+	runner.ShowMessageAt(worldX, worldY, worldZ, message, fontIndex, r, g, b)
 	return nil, nil
 }
 
@@ -284,11 +285,12 @@ func addMessage(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	x := int(arg[0].(float64))
 	y := int(arg[1].(float64))
 	message := arg[2].(string)
-	r := uint8(arg[3].(float64))
-	g := uint8(arg[4].(float64))
-	b := uint8(arg[5].(float64))
+	fontIndex := int(arg[3].(float64))
+	r := uint8(arg[4].(float64))
+	g := uint8(arg[5].(float64))
+	b := uint8(arg[6].(float64))
 	runner := ctx.App["runner"].(*runner.Runner)
-	index := runner.AddMessage(x, y, message, r, g, b)
+	index := runner.AddMessage(x, y, message, fontIndex, r, g, b)
 	return float64(index), nil
 }
 
@@ -307,8 +309,9 @@ func delAllMessages(ctx *bscript.Context, arg ...interface{}) (interface{}, erro
 
 func messageWidth(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	message := arg[0].(string)
+	fontIndex := int(arg[1].(float64))
 	app := ctx.App["app"].(*gfx.App)
-	return float64(app.Font.Width(message)), nil
+	return float64(app.Fonts[fontIndex].Width(message)), nil
 }
 
 func getScreenPos(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {

@@ -16,9 +16,10 @@ import (
 )
 
 type Message struct {
-	x, y    int
-	message string
-	fg      color.Color
+	x, y      int
+	message   string
+	fontIndex int
+	fg        color.Color
 }
 
 type PositionMessage struct {
@@ -31,7 +32,7 @@ type PositionMessage struct {
 }
 
 type PanelControl interface {
-	render(*gfx.Panel)
+	render(*gfx.Panel, *Runner)
 	isInside(x, y int) bool
 }
 
@@ -196,7 +197,7 @@ func (runner *Runner) overlayContents(panel *gfx.Panel) bool {
 	if runner.updateOverlay {
 		panel.Clear()
 		for _, msg := range runner.messages {
-			runner.printOutlineMessage(panel, msg.x, msg.y, msg.message, msg.fg)
+			runner.printOutlineMessage(panel, msg.fontIndex, msg.x, msg.y, msg.message, msg.fg)
 		}
 		runner.updateOverlay = false
 		return true
@@ -204,17 +205,17 @@ func (runner *Runner) overlayContents(panel *gfx.Panel) bool {
 	return false
 }
 
-func (runner *Runner) printOutlineMessage(panel *gfx.Panel, x, y int, message string, fg color.Color) {
+func (runner *Runner) printOutlineMessage(panel *gfx.Panel, fontIndex, x, y int, message string, fg color.Color) {
 	for xx := -1; xx <= 1; xx++ {
 		for yy := -1; yy <= 1; yy++ {
-			runner.app.Font.Printf(panel.Rgba, color.Black, x+xx, y+yy, message)
+			runner.app.Fonts[fontIndex].Printf(panel.Rgba, color.Black, x+xx, y+yy, message)
 		}
 	}
-	runner.app.Font.Printf(panel.Rgba, fg, x, y, message)
+	runner.app.Fonts[fontIndex].Printf(panel.Rgba, fg, x, y, message)
 }
 
-func (runner *Runner) AddMessage(x, y int, message string, r, g, b uint8) int {
-	runner.messages[runner.messageIndex] = &Message{x, y, message, color.RGBA{r, g, b, 255}}
+func (runner *Runner) AddMessage(x, y int, message string, fontIndex int, r, g, b uint8) int {
+	runner.messages[runner.messageIndex] = &Message{x, y, message, fontIndex, color.RGBA{r, g, b, 255}}
 	runner.messageIndex++
 	runner.updateOverlay = true
 	return runner.messageIndex - 1
@@ -233,7 +234,7 @@ func (runner *Runner) DelAllMessages() {
 // todo: PositionMessage-s should be vbo-s instead of using the cpu to recalc their positions
 const MESSAGE_TTL = 2
 
-func (runner *Runner) ShowMessageAt(worldX, worldY, worldZ int, message string, r, g, b uint8) {
+func (runner *Runner) ShowMessageAt(worldX, worldY, worldZ int, message string, fontIndex int, r, g, b uint8) {
 	m := &PositionMessage{
 		worldX:  worldX,
 		worldY:  worldY,
@@ -244,11 +245,11 @@ func (runner *Runner) ShowMessageAt(worldX, worldY, worldZ int, message string, 
 	}
 	runner.positionMessages = append(runner.positionMessages, m)
 	x, y := runner.app.GetScreenPos(worldX, worldY, worldZ)
-	w := runner.app.Font.Width(message)
-	m.ui = runner.app.Ui.AddBg(x, y, int(w), runner.app.Font.Height, color.Transparent, func(panel *gfx.Panel) bool {
+	w := runner.app.Fonts[0].Width(message)
+	m.ui = runner.app.Ui.AddBg(x, y, int(w), runner.app.Fonts[fontIndex].Height, color.Transparent, func(panel *gfx.Panel) bool {
 		if m.init == false {
 			panel.Clear()
-			runner.printOutlineMessage(panel, 0, int(float32(runner.app.Font.Height)*0.75), m.message, m.fg)
+			runner.printOutlineMessage(panel, fontIndex, 0, int(float32(runner.app.Fonts[fontIndex].Height)*0.75), m.message, m.fg)
 			m.init = true
 			return true
 		}
@@ -320,7 +321,7 @@ func (runner *Runner) RaisePanel(name, imageName string) {
 			panel.Clear()
 			draw.Draw(panel.Rgba, image.Rect(0, 0, w, h), bg, image.Point{0, 0}, draw.Over)
 			for _, c := range p.contents {
-				c.render(panel)
+				c.render(panel, runner)
 			}
 			return true
 		}
@@ -369,7 +370,7 @@ type UiImageControl struct {
 	x, y  int
 }
 
-func (c *UiImageControl) render(panel *gfx.Panel) {
+func (c *UiImageControl) render(panel *gfx.Panel, runner *Runner) {
 	icon := c.shape.Image
 	iconW := icon.Bounds().Dx()
 	iconH := icon.Bounds().Dy()
@@ -381,6 +382,21 @@ func (c *UiImageControl) isInside(x, y int) bool {
 	w := icon.Bounds().Dx()
 	h := icon.Bounds().Dy()
 	return x >= c.x && x < c.x+w && y >= c.y && y < c.y+h
+}
+
+type UiTextControl struct {
+	x, y      int
+	fontIndex int
+	text      string
+}
+
+func (c *UiTextControl) render(panel *gfx.Panel, runner *Runner) {
+	// runner.printOutlineMessage(panel, c.fontIndex, c.x, c.y, c.text, color.White)
+	runner.app.Fonts[c.fontIndex].Printf(panel.Rgba, color.RGBA{30, 30, 30, 255}, c.x, c.y, c.text)
+}
+
+func (c *UiTextControl) isInside(x, y int) bool {
+	return false
 }
 
 func (runner *Runner) UpdatePanel(name string, contents *[]interface{}) {
@@ -396,6 +412,13 @@ func (runner *Runner) UpdatePanel(name string, contents *[]interface{}) {
 						shape: shapes.Shapes[shapes.Names[m["name"].(string)]],
 						x:     int(m["x"].(float64)),
 						y:     int(m["y"].(float64)),
+					}
+				case "uiText":
+					p.contents[i] = &UiTextControl{
+						x:         int(m["x"].(float64)),
+						y:         int(m["y"].(float64)),
+						text:      m["text"].(string),
+						fontIndex: int(m["fontIndex"].(float64)),
 					}
 				default:
 					panic(fmt.Sprintf("Unknown runner ui component: %s", t))
