@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nfnt/resize"
+	"github.com/disintegration/imaging"
 
 	// import to initialize png decoding
 	"image/draw"
@@ -134,9 +134,9 @@ func appendUiImage(imageDef map[string]interface{}, img image.Image, shapeMeta *
 	// create a half-size thumbnail
 	rgba := image.NewRGBA(image.Rect(0, 0, int(pw), int(ph)))
 	draw.Draw(rgba, image.Rect(0, 0, int(pw), int(ph)), img, image.Point{int(px), int(py)}, draw.Src)
-	w := uint(float32(rgba.Bounds().Max.X) / shapeMeta.DpiMultiplier)
-	h := uint(float32(rgba.Bounds().Max.Y) / shapeMeta.DpiMultiplier)
-	resized := resize.Resize(w, h, rgba, resize.NearestNeighbor)
+	w := int(float32(rgba.Bounds().Max.X) / shapeMeta.DpiMultiplier)
+	h := int(float32(rgba.Bounds().Max.Y) / shapeMeta.DpiMultiplier)
+	resized := imaging.Resize(rgba, w, h, imaging.NearestNeighbor)
 	uiImage := image.NewRGBA(resized.Bounds())
 	draw.Draw(uiImage, resized.Bounds(), resized, image.ZP, draw.Src)
 
@@ -316,9 +316,9 @@ func newShape(index int, name string, group int, size [3]float32, px, py, pw, ph
 	// create a half-size thumbnail
 	rgba := image.NewRGBA(image.Rect(0, 0, int(pw), int(ph)))
 	draw.Draw(rgba, image.Rect(0, 0, int(pw), int(ph)), img, image.Point{int(px), int(py)}, draw.Src)
-	w := uint(float32(rgba.Bounds().Max.X) / shapeMeta.DpiMultiplier)
-	h := uint(float32(rgba.Bounds().Max.Y) / shapeMeta.DpiMultiplier)
-	resized := resize.Resize(w, h, rgba, resize.NearestNeighbor)
+	w := int(float32(rgba.Bounds().Max.X) / shapeMeta.DpiMultiplier)
+	h := int(float32(rgba.Bounds().Max.Y) / shapeMeta.DpiMultiplier)
+	resized := imaging.Resize(rgba, w, h, imaging.NearestNeighbor)
 	shape.Image = image.NewRGBA(resized.Bounds())
 	draw.Draw(shape.Image, resized.Bounds(), resized, image.ZP, draw.Src)
 

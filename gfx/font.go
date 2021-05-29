@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/disintegration/imaging"
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
 	"golang.org/x/image/font"
@@ -20,6 +21,8 @@ import (
 const (
 	lowChar  = 32
 	highChar = 127
+	dpi      = 72
+	hinting  = font.HintingFull
 )
 
 type character struct {
@@ -29,6 +32,7 @@ type character struct {
 	bearingH int //glyph bearing horizontal
 	bearingV int //glyph bearing vertical
 	rgba     *image.RGBA
+	img      image.Image
 }
 
 type Font struct {
@@ -36,7 +40,7 @@ type Font struct {
 	Height int
 }
 
-func NewFont(fontPath string, scale int) (*Font, error) {
+func NewFont(fontPath string, scale int, alphaMin, alphaDiv uint8) (*Font, error) {
 	fmt.Printf("Reading font file: %s\n", fontPath)
 	file, err := os.Open(fontPath)
 	if err != nil {
@@ -64,7 +68,7 @@ func NewFont(fontPath string, scale int) (*Font, error) {
 	}
 	f.chars = make([]*character, 0, highChar-lowChar+1)
 	for ch := lowChar; ch <= highChar; ch++ {
-		char, err := newChar(ttf, ch, scale)
+		char, err := newChar(ttf, ch, scale, alphaMin, alphaDiv)
 		if err != nil {
 			return nil, err
 		}
@@ -73,14 +77,14 @@ func NewFont(fontPath string, scale int) (*Font, error) {
 	return f, nil
 }
 
-func newChar(ttf *truetype.Font, ch, scale int) (*character, error) {
+func newChar(ttf *truetype.Font, ch, scale int, alphaMin, alphaDiv uint8) (*character, error) {
 	char := new(character)
 
 	//create new face to measure glyph diamensions
 	ttfFace := truetype.NewFace(ttf, &truetype.Options{
 		Size:    float64(scale),
-		DPI:     72,
-		Hinting: font.HintingFull,
+		DPI:     dpi,
+		Hinting: hinting,
 	})
 
 	gBnd, gAdv, ok := ttfFace.GlyphBounds(rune(ch))
@@ -123,13 +127,13 @@ func newChar(ttf *truetype.Font, ch, scale int) (*character, error) {
 
 	//create a freetype context for drawing
 	c := freetype.NewContext()
-	c.SetDPI(72)
+	c.SetDPI(dpi)
 	c.SetFont(ttf)
 	c.SetFontSize(float64(scale))
 	c.SetClip(char.rgba.Bounds())
 	c.SetDst(char.rgba)
 	c.SetSrc(fg)
-	c.SetHinting(font.HintingFull)
+	c.SetHinting(hinting)
 
 	//set the glyph dot
 	px := 0 - (int(gBnd.Min.X) >> 6)
@@ -140,6 +144,19 @@ func newChar(ttf *truetype.Font, ch, scale int) (*character, error) {
 	_, err := c.DrawString(string(ch), pt)
 	if err != nil {
 		return nil, err
+	}
+
+	if alphaMin > 0 && alphaDiv > 0 {
+		// "sharpen" the font by reducing low alpha values even more
+		char.img = imaging.AdjustFunc(char.rgba, func(c color.NRGBA) color.NRGBA {
+			a := c.A
+			if a < alphaMin {
+				a = uint8(float32(a) / float32(alphaDiv))
+			}
+			return color.NRGBA{c.R, c.G, c.B, a}
+		})
+	} else {
+		char.img = char.rgba
 	}
 
 	return char, nil
@@ -205,7 +222,7 @@ func (f *Font) Printf(dst draw.Image, fg color.Color, x, y int, fs string, argv 
 		// ypos := y + ch.height - ch.bearingV
 		ypos := y - ch.height + ch.bearingV
 
-		draw.DrawMask(dst, image.Rect(xpos, ypos, xpos+ch.width, ypos+ch.height), src, image.ZP, ch.rgba, image.ZP, draw.Over)
+		draw.DrawMask(dst, image.Rect(xpos, ypos, xpos+ch.width, ypos+ch.height), src, image.ZP, ch.img, image.ZP, draw.Over)
 
 		// Now advance cursors for next glyph (note that advance is number of 1/64 pixels)
 		x += (ch.advance >> 6) // Bitshift by 6 to get value in pixels (2^6 = 64 (divide amount of 1/64th pixels by 64 to get amount of pixels))

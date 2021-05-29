@@ -7,16 +7,20 @@ type CalendarUpdate interface {
 }
 
 type Calendar struct {
+	Paused          bool
 	MinsSinceEpoch  int
 	incSpeed, ticks float64
 	EventListener   CalendarUpdate
 }
 
 func NewCalendar(mins, hours, day, month, year int, incSpeed float64) *Calendar {
-	return &Calendar{ToEpoch(mins, hours, day, month, year), incSpeed, 0, nil}
+	return &Calendar{false, ToEpoch(mins, hours, day, month, year), incSpeed, 0, nil}
 }
 
 func (c *Calendar) Incr(delta float64) {
+	if c.Paused {
+		return
+	}
 	c.ticks += delta
 	if c.ticks >= c.incSpeed {
 		c.ticks = 0

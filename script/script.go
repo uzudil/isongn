@@ -33,6 +33,13 @@ func getCalendar(ctx *bscript.Context, arg ...interface{}) (interface{}, error) 
 	return &r, nil
 }
 
+func setCalendarPaused(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	paused := arg[0].(bool)
+	runner := ctx.App["runner"].(*runner.Runner)
+	runner.Calendar.Paused = paused
+	return nil, nil
+}
+
 func saveGame(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	app := ctx.App["app"].(*gfx.App)
 	app.Loader.SaveAll()
@@ -643,6 +650,7 @@ func InitScript() {
 	bscript.AddBuiltin("getDateTime", getDateTime)
 	bscript.AddBuiltin("getTime", getTime)
 	bscript.AddBuiltin("getCalendar", getCalendar)
+	bscript.AddBuiltin("setCalendarPaused", setCalendarPaused)
 	bscript.AddBuiltin("getScreenPos", getScreenPos)
 	bscript.AddBuiltin("distance", distance)
 	bscript.AddBuiltin("findPath", findPath)

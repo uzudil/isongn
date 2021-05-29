@@ -225,8 +225,17 @@ func (app *App) addFonts(appConfig *AppConfig, gameDir, mode string) {
 		if ok == false {
 			panic("Can't find fontSize in runtime config")
 		}
+		var alphaMin, alphaDiv uint8
+		alphaMinI, ok := fontBlock["alphaMin"]
+		if ok {
+			alphaMin = uint8(alphaMinI.(float64))
+		}
+		alphaDivI, ok := fontBlock["alphaDiv"]
+		if ok {
+			alphaDiv = uint8(alphaDivI.(float64))
+		}
 
-		font, err := NewFont(filepath.Join(gameDir, fontName.(string)), int(fontSize.(float64)))
+		font, err := NewFont(filepath.Join(gameDir, fontName.(string)), int(fontSize.(float64)), alphaMin, alphaDiv)
 		if err != nil {
 			panic(err)
 		}
