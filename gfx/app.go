@@ -93,6 +93,7 @@ type App struct {
 	DragAction                           string
 	DragIndex                            int
 	cursorPanel                          *Panel
+	Loading                              bool
 }
 
 func NewApp(game Game, gameDir string, windowWidth, windowHeight int, targetFps float64) *App {
@@ -312,6 +313,9 @@ func (app *App) IsFirstDownMod(key glfw.Key, mod glfw.ModifierKey) bool {
 }
 
 func (app *App) Keypressed(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+	if app.Loading {
+		return
+	}
 	if action == glfw.Release {
 		delete(app.KeyState, key)
 	} else {

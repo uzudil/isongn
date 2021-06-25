@@ -107,6 +107,15 @@ func eraseShape(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	return nil, nil
 }
 
+func eraseShapeExact(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	x := int(arg[0].(float64))
+	y := int(arg[1].(float64))
+	z := int(arg[2].(float64))
+	app := ctx.App["app"].(*gfx.App)
+	app.View.EraseShapeExact(x, y, z)
+	return nil, nil
+}
+
 func setShape(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	x := int(arg[0].(float64))
 	y := int(arg[1].(float64))
@@ -624,6 +633,7 @@ func InitScript() {
 	bscript.AddBuiltin("isDown", isDown)
 	bscript.AddBuiltin("getPosition", getPosition)
 	bscript.AddBuiltin("eraseShape", eraseShape)
+	bscript.AddBuiltin("eraseShapeExact", eraseShapeExact)
 	bscript.AddBuiltin("setShape", setShape)
 	bscript.AddBuiltin("moveShape", moveShape)
 	bscript.AddBuiltin("getShape", getShape)

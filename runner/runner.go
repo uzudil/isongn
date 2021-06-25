@@ -193,6 +193,10 @@ func (runner *Runner) SectionSave(x, y int) map[string]interface{} {
 	return ret.(map[string]interface{})
 }
 
+func (runner *Runner) Loading(working bool) {
+	runner.app.Loading = working
+}
+
 func (runner *Runner) overlayContents(panel *gfx.Panel) bool {
 	if runner.updateOverlay {
 		panel.Clear()

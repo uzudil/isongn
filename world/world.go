@@ -45,6 +45,18 @@ func NewSectionCache() *SectionCache {
 	return &SectionCache{}
 }
 
+func (c *SectionCache) describe() string {
+	s := ""
+	for _, cc := range c.cache {
+		if cc == nil {
+			s += " __,__"
+		} else {
+			s += fmt.Sprintf(" %d,%d", cc.X, cc.Y)
+		}
+	}
+	return s
+}
+
 type Loader struct {
 	observer     WorldObserver
 	userDir      string
@@ -57,6 +69,7 @@ type Loader struct {
 type WorldObserver interface {
 	SectionLoad(x, y int, data map[string]interface{})
 	SectionSave(x, y int) map[string]interface{}
+	Loading(working bool)
 }
 
 func NewLoader(observer WorldObserver, userDir, gameDir string) *Loader {
@@ -187,19 +200,34 @@ func (loader *Loader) getPosInSection(worldX, worldY, worldZ int) (*Section, int
 
 func (loader *Loader) getSection(sx, sy int) (*Section, error) {
 	// already loaded?
+	nilFound := false
 	oldestIndex := -1
 	for i := 0; i < len(loader.sectionCache.cache); i++ {
-		if loader.sectionCache.cache[i] != nil && loader.sectionCache.cache[i].X == sx && loader.sectionCache.cache[i].Y == sy {
-			return loader.sectionCache.cache[i], nil
-		}
-		if oldestIndex == -1 || loader.sectionCache.times[i] < loader.sectionCache.times[oldestIndex] {
+		if loader.sectionCache.cache[i] == nil {
+			nilFound = true
 			oldestIndex = i
+		} else {
+			if loader.sectionCache.cache[i].X == sx && loader.sectionCache.cache[i].Y == sy {
+				return loader.sectionCache.cache[i], nil
+			}
 		}
 	}
+
+	if nilFound == false {
+		oldestIndex = -1
+		for i := 0; i < len(loader.sectionCache.cache); i++ {
+			if oldestIndex == -1 || loader.sectionCache.times[i] < loader.sectionCache.times[oldestIndex] {
+				oldestIndex = i
+			}
+		}
+	}
+
+	loader.observer.Loading(true)
 
 	// save version in cache
 	if loader.sectionCache.cache[oldestIndex] != nil {
 		oldSection := loader.sectionCache.cache[oldestIndex]
+		fmt.Printf("+++ NEED section %d,%d, evicting %d,%d CACHE=%s\n", sx, sy, oldSection.X, oldSection.Y, loader.sectionCache.describe())
 		oldSection.data = loader.observer.SectionSave(oldSection.X, oldSection.Y)
 		err := loader.save(oldSection)
 		if err != nil {
@@ -218,6 +246,7 @@ func (loader *Loader) getSection(sx, sy int) (*Section, error) {
 	loader.sectionCache.times[oldestIndex] = glfw.GetTime()
 
 	loader.observer.SectionLoad(sx, sy, section.data)
+	loader.observer.Loading(false)
 
 	// fmt.Printf("CACHE: \n")
 	// for i := range loader.sectionCache.cache {

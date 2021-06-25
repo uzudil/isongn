@@ -407,6 +407,9 @@ func (e *Editor) shapeSelectorContents(panel *gfx.Panel) bool {
 func (e *Editor) SectionLoad(x, y int, data map[string]interface{}) {
 }
 
+func (e *Editor) Loading(working bool) {
+}
+
 func (e *Editor) SectionSave(x, y int) map[string]interface{} {
 	return map[string]interface{}{}
 }
