@@ -213,10 +213,13 @@ func (loader *Loader) getSection(sx, sy int) (*Section, error) {
 		}
 	}
 
+	px := loader.X / SECTION_SIZE
+	py := loader.Y / SECTION_SIZE
 	if nilFound == false {
 		oldestIndex = -1
 		for i := 0; i < len(loader.sectionCache.cache); i++ {
-			if oldestIndex == -1 || loader.sectionCache.times[i] < loader.sectionCache.times[oldestIndex] {
+			c := loader.sectionCache.cache[i]
+			if (px != c.X || py != c.Y) && (oldestIndex == -1 || loader.sectionCache.times[i] < loader.sectionCache.times[oldestIndex]) {
 				oldestIndex = i
 			}
 		}
@@ -227,7 +230,12 @@ func (loader *Loader) getSection(sx, sy int) (*Section, error) {
 	// save version in cache
 	if loader.sectionCache.cache[oldestIndex] != nil {
 		oldSection := loader.sectionCache.cache[oldestIndex]
-		fmt.Printf("+++ NEED section %d,%d, evicting %d,%d CACHE=%s\n", sx, sy, oldSection.X, oldSection.Y, loader.sectionCache.describe())
+		fmt.Printf("+++ NEED section %d,%d, EVICTING %d,%d, PLAYER in %d,%d CACHE=%s\n",
+			sx, sy,
+			oldSection.X, oldSection.Y,
+			px, py,
+			loader.sectionCache.describe(),
+		)
 		oldSection.data = loader.observer.SectionSave(oldSection.X, oldSection.Y)
 		err := loader.save(oldSection)
 		if err != nil {
