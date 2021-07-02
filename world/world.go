@@ -367,6 +367,20 @@ func (section *Section) calculateUnder() {
 	}
 }
 
+func (section *Section) removeTransient() {
+	for x := 0; x < SECTION_SIZE; x++ {
+		for y := 0; y < SECTION_SIZE; y++ {
+			for z := 0; z < SECTION_Z_SIZE-1; z++ {
+				block := section.Pos[x][y][z].Block
+				if block > 0 && shapes.Shapes[block-1].IsSaved == false {
+					fmt.Printf("\tNOT SAVING %s\n", shapes.Shapes[block-1].Name)
+					section.Pos[x][y][z].Block = 0
+				}
+			}
+		}
+	}
+}
+
 func (loader *Loader) save(section *Section) error {
 	defer un(trace(fmt.Sprintf("Saving map %d,%d", section.X, section.Y)))
 
@@ -391,6 +405,8 @@ func (loader *Loader) save(section *Section) error {
 
 	b := []byte{VERSION}
 	fz.Write(b)
+
+	section.removeTransient()
 
 	if loader.ioMode == EDITOR_MODE {
 		section.calculateUnder()

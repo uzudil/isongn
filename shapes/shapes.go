@@ -62,6 +62,7 @@ type Shape struct {
 	NoSupport      bool
 	IsExtra        bool
 	IsDraggable    bool
+	IsSaved        bool
 }
 
 var Shapes []*Shape
@@ -311,6 +312,7 @@ func newShape(index int, name string, group int, size [3]float32, px, py, pw, ph
 		ShapeMeta:  shapeMeta,
 		Edges:      map[string]map[string][]*Shape{},
 		Offset:     offset,
+		IsSaved:    true,
 	}
 
 	// create a half-size thumbnail
@@ -356,6 +358,7 @@ func InitCreatures(gameDir string, data []map[string]interface{}) error {
 			ImageIndex: imageIndex,
 			Animations: map[int]*Animation{},
 			AlphaMin:   alphaMinDefault,
+			IsSaved:    false,
 		}
 		shape.addExtras(block)
 
