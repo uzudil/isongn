@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ const readMousePos = 2
 
 type Game interface {
 	Init(app *App, config map[string]interface{})
+	Exit()
 	Name() string
 	Events(delta float64, fadeDir int, mouseX, mouseY int32)
 	GetZ() int
@@ -115,6 +117,17 @@ func NewApp(game Game, gameDir string, windowWidth, windowHeight int, targetFps 
 		windowHeight: windowHeight,
 		Fonts:        []*Font{},
 	}
+
+	// ctrl+c handling
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		for _ = range c {
+			app.AppExit(nil)
+			os.Exit(0)
+		}
+	}()
+
 	app.addFonts(appConfig, gameDir, game.Name())
 	app.Dir = initUserdir(appConfig.Name)
 	app.Window = initWindow(windowWidth, windowHeight)
@@ -128,6 +141,7 @@ func NewApp(game Game, gameDir string, windowWidth, windowHeight int, targetFps 
 	app.Window.SetScrollCallback(app.MouseScroll)
 	app.Window.SetCursorPosCallback(app.MousePos)
 	app.Window.SetMouseButtonCallback(app.MouseClick)
+	app.Window.SetCloseCallback(app.AppExit)
 	app.frameBuffer = NewFrameBuffer(int32(width), int32(height), true)
 	app.uiFrameBuffer = NewFrameBuffer(int32(width), int32(height), false)
 	err := shapes.InitShapes(gameDir, appConfig.shapes)
@@ -574,4 +588,73 @@ func (app *App) incrFade(last float64) {
 			app.fadeFx()
 		}
 	}
+}
+
+func (app *App) SaveMap(name string, m map[string]interface{}) error {
+	jsonstr, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	f := filepath.Join(app.Dir, name)
+	fmt.Printf("Saving: %s\n", f)
+	return ioutil.WriteFile(f, []byte(jsonstr), 0644)
+}
+
+func (app *App) LoadMap(name string) (*map[string]interface{}, error) {
+	f := filepath.Join(app.Dir, name)
+	if _, err := os.Stat(f); err != nil {
+		// return nil not error: file missing is not an error
+		return nil, nil
+	}
+	fmt.Printf("Loading: %s\n", f)
+	bytes, err := ioutil.ReadFile(f)
+	if err != nil {
+		return nil, err
+	}
+	data := map[string]interface{}{}
+	err = json.Unmarshal(bytes, &data)
+	if err != nil {
+		return nil, err
+	}
+	fixArrays(data)
+	return &data, nil
+}
+
+func fixArrays(data interface{}) {
+	mapdata, ok := data.(map[string]interface{})
+	if ok {
+		for k, v := range mapdata {
+			m, ok := v.(map[string]interface{})
+			if ok {
+				fixArrays(m)
+			}
+
+			arr, ok := v.([]interface{})
+			if ok {
+				fixArrays(arr)
+				mapdata[k] = &arr
+			}
+		}
+	}
+
+	arrdata, ok := data.([]interface{})
+	if ok {
+		for i, v := range arrdata {
+			m, ok := v.(map[string]interface{})
+			if ok {
+				fixArrays(m)
+			}
+
+			arr, ok := v.([]interface{})
+			if ok {
+				fixArrays(arr)
+				arrdata[i] = &arr
+			}
+		}
+	}
+}
+
+func (app *App) AppExit(w *glfw.Window) {
+	fmt.Println("* AppExit callback")
+	app.Game.Exit()
 }

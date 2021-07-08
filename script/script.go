@@ -33,6 +33,18 @@ func getCalendar(ctx *bscript.Context, arg ...interface{}) (interface{}, error) 
 	return &r, nil
 }
 
+func getCalendarRaw(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	runner := ctx.App["runner"].(*runner.Runner)
+	return float64(runner.Calendar.MinsSinceEpoch), nil
+}
+
+func setCalendarRaw(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	mins := int(arg[0].(float64))
+	runner := ctx.App["runner"].(*runner.Runner)
+	runner.Calendar.MinsSinceEpoch = mins
+	return nil, nil
+}
+
 func setCalendarPaused(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	paused := arg[0].(bool)
 	runner := ctx.App["runner"].(*runner.Runner)
@@ -48,6 +60,24 @@ func saveGame(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 
 func loadGame(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	return nil, nil
+}
+
+func saveMap(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	name := arg[0].(string)
+	m := arg[1].(map[string]interface{})
+	app := ctx.App["app"].(*gfx.App)
+	return nil, app.SaveMap(name, m)
+}
+
+func loadMap(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	name := arg[0].(string)
+	app := ctx.App["app"].(*gfx.App)
+	m, e := app.LoadMap(name)
+	if m == nil {
+		return nil, e
+	} else {
+		return *m, e
+	}
 }
 
 func intersectsShapes(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
@@ -447,10 +477,16 @@ func raisePanel(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	return nil, nil
 }
 
+func centerPanel(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	name := arg[0].(string)
+	runner := ctx.App["runner"].(*runner.Runner)
+	runner.CenterPanel(name)
+	return nil, nil
+}
+
 func closeTopPanel(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	runner := ctx.App["runner"].(*runner.Runner)
-	runner.CloseTopPanel()
-	return nil, nil
+	return runner.CloseTopPanel(), nil
 }
 
 func isOverPanel(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
@@ -652,6 +688,8 @@ func InitScript() {
 	bscript.AddBuiltin("isInView", isInView)
 	bscript.AddBuiltin("saveGame", saveGame)
 	bscript.AddBuiltin("loadGame", loadGame)
+	bscript.AddBuiltin("saveMap", saveMap)
+	bscript.AddBuiltin("loadMap", loadMap)
 	bscript.AddBuiltin("showMessageAt", showMessageAt)
 	bscript.AddBuiltin("addMessage", addMessage)
 	bscript.AddBuiltin("delMessage", delMessage)
@@ -661,6 +699,8 @@ func InitScript() {
 	bscript.AddBuiltin("getTime", getTime)
 	bscript.AddBuiltin("getCalendar", getCalendar)
 	bscript.AddBuiltin("setCalendarPaused", setCalendarPaused)
+	bscript.AddBuiltin("getCalendarRaw", getCalendarRaw)
+	bscript.AddBuiltin("setCalendarRaw", setCalendarRaw)
 	bscript.AddBuiltin("getScreenPos", getScreenPos)
 	bscript.AddBuiltin("distance", distance)
 	bscript.AddBuiltin("findPath", findPath)
@@ -671,6 +711,7 @@ func InitScript() {
 	bscript.AddBuiltin("setCursorShape", setCursorShape)
 	bscript.AddBuiltin("clearCursorShape", clearCursorShape)
 	bscript.AddBuiltin("raisePanel", raisePanel)
+	bscript.AddBuiltin("centerPanel", centerPanel)
 	bscript.AddBuiltin("closeTopPanel", closeTopPanel)
 	bscript.AddBuiltin("isOverPanel", isOverPanel)
 	bscript.AddBuiltin("getOverPanel", getOverPanel)

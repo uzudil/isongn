@@ -417,3 +417,5 @@ func (e *Editor) SectionSave(x, y int) map[string]interface{} {
 func (e *Editor) DragFromUi(pixelX, pixelY int) (string, int) {
 	return "", 0
 }
+
+func (e *Editor) Exit() {}

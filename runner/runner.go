@@ -59,6 +59,7 @@ type Runner struct {
 	sectionSaveCall      *bscript.Variable
 	sectionSaveXArg      *bscript.Value
 	sectionSaveYArg      *bscript.Value
+	exitCall             *bscript.Variable
 	messages             map[int]*Message
 	messageIndex         int
 	updateOverlay        bool
@@ -154,6 +155,8 @@ func (runner *Runner) Init(app *gfx.App, config map[string]interface{}) {
 	runner.sectionSaveYArg = &bscript.Value{Number: &bscript.SignedNumber{}}
 	runner.sectionSaveCall = util.NewFunctionCall("beforeSectionSave", runner.sectionSaveXArg, runner.sectionSaveYArg)
 
+	runner.exitCall = util.NewFunctionCall("exitEvent")
+
 	// run the main method
 	_, err = ast.Evaluate(ctx)
 	if err != nil {
@@ -189,7 +192,10 @@ func (runner *Runner) SectionLoad(x, y int, data map[string]interface{}) {
 func (runner *Runner) SectionSave(x, y int) map[string]interface{} {
 	runner.sectionSaveXArg.Number.Number = float64(x)
 	runner.sectionSaveYArg.Number.Number = float64(y)
-	ret, _ := runner.sectionSaveCall.Evaluate(runner.ctx)
+	ret, err := runner.sectionSaveCall.Evaluate(runner.ctx)
+	if err != nil {
+		panic(err)
+	}
 	return ret.(map[string]interface{})
 }
 
@@ -335,7 +341,7 @@ func (runner *Runner) RaisePanel(name, imageName string) {
 	runner.panels = append(runner.panels, p)
 }
 
-func (runner *Runner) CloseTopPanel() {
+func (runner *Runner) CloseTopPanel() bool {
 	panel := runner.app.Ui.GetTop()
 	if panel != nil {
 		for i, p := range runner.panels {
@@ -344,9 +350,11 @@ func (runner *Runner) CloseTopPanel() {
 				runner.panels[i] = runner.panels[len(runner.panels)-1]
 				runner.panels = runner.panels[0 : len(runner.panels)-1]
 				runner.app.Ui.Remove(panel)
+				return true
 			}
 		}
 	}
+	return false
 }
 
 func (runner *Runner) IsOverPanel(name string) (int, int, bool) {
@@ -403,6 +411,15 @@ func (c *UiTextControl) isInside(x, y int) bool {
 	return false
 }
 
+func (runner *Runner) CenterPanel(name string) {
+	for _, p := range runner.panels {
+		if p.name == name {
+			runner.app.Ui.MovePanel(p.panel, (runner.app.Width-p.panel.W)/2, (runner.app.Height-p.panel.H)/2)
+			return
+		}
+	}
+}
+
 func (runner *Runner) UpdatePanel(name string, contents *[]interface{}) {
 	for _, p := range runner.panels {
 		if p.name == name {
@@ -445,4 +462,8 @@ func (runner *Runner) DragFromUi(pixelX, pixelY int) (string, int) {
 		}
 	}
 	return "", 0
+}
+
+func (runner *Runner) Exit() {
+	runner.exitCall.Evaluate(runner.ctx)
 }
