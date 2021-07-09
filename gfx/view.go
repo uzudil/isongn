@@ -295,8 +295,13 @@ func (view *View) getBlockerAt(toViewX, toViewY, toViewZ int, box *BoundingBox, 
 	var blocker *BlockPos
 	view.search(toViewX+box.W, toViewY+box.H, toViewZ+box.D, func(bp *BlockPos) bool {
 		pathThrough := false
-		if view.context.isPathing && view.context.usePathThrough {
-			_, pathThrough = view.context.pathThroughShapes[shapes.Shapes[bp.pos.Block-1]]
+		if view.context.isPathing {
+			if view.context.usePathThrough {
+				_, pathThrough = view.context.pathThroughShapes[shapes.Shapes[bp.pos.Block-1]]
+			}
+			if view.context.end.pos != nil && view.context.end.pos.Block > 0 && bp.pos.Block == view.context.end.pos.Block {
+				pathThrough = true
+			}
 		}
 		if !pathThrough && bp != src && bp.box.intersect(box) {
 			blocker = bp
