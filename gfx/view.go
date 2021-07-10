@@ -28,7 +28,7 @@ type BlockPos struct {
 	dir                    shapes.Direction
 	animationTimer         float64
 	animationType          int
-	animationSpeed         float64
+	animationStep          int
 	ScrollOffset           [2]float32
 	pathNode               PathNode
 	selectColor            [3]float32
@@ -469,12 +469,15 @@ func (view *View) SetOffset(worldX, worldY, worldZ int, dx, dy float32) {
 	}
 }
 
-func (view *View) SetShapeAnimation(worldX, worldY, worldZ int, animationType int, dir shapes.Direction, animationSpeed float64) {
+func (view *View) SetShapeAnimation(worldX, worldY, worldZ int, animationType int, dir shapes.Direction) {
 	blockPos := view.GetBlockPos(worldX, worldY, worldZ)
 	if blockPos != nil {
+		if blockPos.animationType != animationType {
+			blockPos.animationStep = 0
+			blockPos.animationTimer = 0
+		}
 		blockPos.dir = dir
 		blockPos.animationType = animationType
-		blockPos.animationSpeed = animationSpeed
 	}
 }
 
@@ -638,7 +641,7 @@ func (b *BlockPos) Draw(view *View, block *Block, extraIndex int, shader *ViewSh
 		if animation, ok := block.shape.Animations[b.animationType]; ok {
 			b.incrAnimationStep(animation)
 			if steps, ok := animation.Tex[b.dir]; ok {
-				gl.Uniform1f(shader.textureOffsetUniform, steps[animation.AnimationStep].TexOffset[0])
+				gl.Uniform1f(shader.textureOffsetUniform, steps[b.animationStep].TexOffset[0])
 				animated = true
 			}
 		}
@@ -653,11 +656,17 @@ func (b *BlockPos) Draw(view *View, block *Block, extraIndex int, shader *ViewSh
 func (b *BlockPos) incrAnimationStep(animation *shapes.Animation) {
 	b.animationTimer -= state.delta
 	if b.animationTimer <= 0 {
-		b.animationTimer = b.animationSpeed
-		animation.AnimationStep++
+		b.animationTimer = 0.05 * 4.0 / float64(animation.Steps)
+		if b.animationType == 2 {
+			fmt.Printf("attack animation time=%.2f delta=%.2f\n", b.animationTimer, state.delta)
+		}
+		b.animationStep++
 	}
-	if animation.AnimationStep >= animation.Steps {
-		animation.AnimationStep = 0
+	if b.animationStep >= animation.Steps {
+		if b.animationType == 2 {
+			fmt.Println("restarting attack animation!")
+		}
+		b.animationStep = 0
 	}
 }
 

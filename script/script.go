@@ -225,9 +225,8 @@ func setAnimation(ctx *bscript.Context, arg ...interface{}) (interface{}, error)
 	z := int(arg[2].(float64))
 	name := arg[3].(string)
 	dir := arg[4].(float64)
-	animationSpeed := arg[5].(float64)
 	app := ctx.App["app"].(*gfx.App)
-	app.View.SetShapeAnimation(x, y, z, shapes.AnimationNames[name], shapes.Direction(dir), animationSpeed)
+	app.View.SetShapeAnimation(x, y, z, shapes.AnimationNames[name], shapes.Direction(dir))
 	return nil, nil
 }
 
