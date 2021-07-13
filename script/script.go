@@ -407,8 +407,10 @@ func findPath(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	ey := int(arg[4].(float64))
 	ez := int(arg[5].(float64))
 	isFlying := arg[6].(bool)
+	dSrc := int(arg[7].(float64))
+	dDst := int(arg[8].(float64))
 	app := ctx.App["app"].(*gfx.App)
-	path := app.View.FindPath(sx, sy, sz, ex, ey, ez, isFlying)
+	path := app.View.FindPath(sx, sy, sz, ex, ey, ez, isFlying, dSrc, dDst)
 	if path == nil {
 		return nil, nil
 	} else {

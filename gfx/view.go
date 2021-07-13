@@ -299,7 +299,7 @@ func (view *View) getBlockerAt(toViewX, toViewY, toViewZ int, box *BoundingBox, 
 			if view.context.usePathThrough {
 				_, pathThrough = view.context.pathThroughShapes[shapes.Shapes[bp.pos.Block-1]]
 			}
-			if view.context.end.pos != nil && view.context.end.pos.Block > 0 && bp.pos.Block == view.context.end.pos.Block {
+			if bp == view.context.end {
 				pathThrough = true
 			}
 		}
@@ -657,15 +657,9 @@ func (b *BlockPos) incrAnimationStep(animation *shapes.Animation) {
 	b.animationTimer -= state.delta
 	if b.animationTimer <= 0 {
 		b.animationTimer = 0.05 * 4.0 / float64(animation.Steps)
-		if b.animationType == 2 {
-			fmt.Printf("attack animation time=%.2f delta=%.2f\n", b.animationTimer, state.delta)
-		}
 		b.animationStep++
 	}
 	if b.animationStep >= animation.Steps {
-		if b.animationType == 2 {
-			fmt.Println("restarting attack animation!")
-		}
 		b.animationStep = 0
 	}
 }

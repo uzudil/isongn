@@ -22,13 +22,14 @@ type ViewContext struct {
 	usePathThrough    bool
 	pathThroughShapes map[*shapes.Shape]bool
 	start, end        *BlockPos
+	startBox, endBox  *BoundingBox
 }
 
 func (view *View) AddPathThroughShape(shape *shapes.Shape) {
 	view.context.pathThroughShapes[shape] = true
 }
 
-func (view *View) FindPath(sx, sy, sz, ex, ey, ez int, isFlying bool) []PathStep {
+func (view *View) FindPath(sx, sy, sz, ex, ey, ez int, isFlying bool, dSrc, dDst int) []PathStep {
 	view.context.isFlying = isFlying
 	view.context.isPathing = true
 	startViewX, startViewY, startViewZ, startOk := view.toViewPos(sx, sy, sz)
@@ -37,6 +38,8 @@ func (view *View) FindPath(sx, sy, sz, ex, ey, ez int, isFlying bool) []PathStep
 	if startOk && endOk {
 		view.context.start = view.blockPos[startViewX][startViewY][startViewZ]
 		view.context.end = view.blockPos[endViewX][endViewY][endViewZ]
+		view.context.startBox = &BoundingBox{startViewX, startViewY, startViewZ, dSrc, dSrc, 4}
+		view.context.endBox = &BoundingBox{endViewX, endViewY, endViewZ, dDst, dDst, 4}
 		// first try w/o doors
 		view.context.usePathThrough = false
 		steps = view.findPath()
@@ -78,7 +81,9 @@ func (view *View) findPath() []PathStep {
 		currentNode := openList[lowInd]
 
 		// End case -- result has been found, return the traced path
-		if currentNode == view.context.end {
+		view.context.startBox.SetPos(currentNode.x, currentNode.y, currentNode.z)
+		if view.context.startBox.intersect(view.context.endBox) {
+			//if currentNode == view.context.end {
 			return view.generatePath(currentNode)
 		}
 
@@ -103,7 +108,7 @@ func (view *View) findPath() []PathStep {
 					// This the the first time we have arrived at this node, it must be the best
 					// Also, we need to take the h (heuristic) score since we haven't done so yet
 					gScoreIsBest = true
-					neighbor.pathNode.h = heuristic(neighbor, view.context.end)
+					neighbor.pathNode.h = view.heuristic(neighbor, view.context.end)
 					neighbor.pathNode.visited = true
 					openList = append(openList, neighbor)
 				} else if gScore < neighbor.pathNode.g {
@@ -126,11 +131,11 @@ func (view *View) findPath() []PathStep {
 	return nil
 }
 
-func heuristic(pos0, pos1 *BlockPos) int {
+func (view *View) heuristic(pos0, pos1 *BlockPos) int {
 	// Manhattan distance. See list of heuristics: http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html
-	d1 := util.AbsInt(pos1.x - pos0.x)
-	d2 := util.AbsInt(pos1.y - pos0.y)
-	d3 := util.AbsInt(pos1.z - pos0.z)
+	d1 := util.AbsInt(pos1.x + view.context.startBox.W/2 - pos0.x + view.context.endBox.W/2)
+	d2 := util.AbsInt(pos1.y + view.context.startBox.W/2 - pos0.y + view.context.endBox.W/2)
+	d3 := util.AbsInt(pos1.z + view.context.startBox.W/2 - pos0.z + view.context.endBox.W/2)
 	return d1 + d2 + d3
 }
 
