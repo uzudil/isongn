@@ -204,6 +204,10 @@ uniform vec3 selectMode;
 in vec2 fragTexCoord;
 layout(location = 0) out vec4 outputColor;
 void main() {
+	vec4 val = texture(tex, fragTexCoord);
+	if (val.a < alphaMin) {
+		discard;
+	}
 	outputColor = vec4(selectMode.r, selectMode.g, selectMode.b, 1);
 }
 ` + "\x00"
