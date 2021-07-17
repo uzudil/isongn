@@ -262,6 +262,13 @@ func fadeViewTo(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	return nil, nil
 }
 
+func getDirScreen(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	sx := arg[0].(float64)
+	sy := arg[1].(float64)
+	app := ctx.App["app"].(*gfx.App)
+	return float64(shapes.GetDirScreen(sx-float64(app.Width/2), sy-float64(app.Height/2))), nil
+}
+
 func getDir(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	dx := int(arg[0].(float64))
 	dy := int(arg[1].(float64))
@@ -457,10 +464,22 @@ func findTop(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
 	}
 }
 
-func setCursorShape(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
-	shapeIndex := shapes.Names[arg[0].(string)]
+func setCursor(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	s := arg[0].(string)
 	app := ctx.App["app"].(*gfx.App)
-	app.SetCursorShape(shapeIndex)
+	app.SetCursor(s)
+	return nil, nil
+}
+
+func setCursorShape(ctx *bscript.Context, arg ...interface{}) (interface{}, error) {
+	s := arg[0].(string)
+	app := ctx.App["app"].(*gfx.App)
+	if shapeIndex, ok := shapes.Names[s]; ok {
+		shape := shapes.Shapes[shapeIndex]
+		app.SetCursorShape(shape.Image)
+	} else if img, ok := shapes.UiImages[s]; ok {
+		app.SetCursorShape(img)
+	}
 	return nil, nil
 }
 
@@ -685,6 +704,7 @@ func InitScript() {
 	bscript.AddBuiltin("setViewScroll", setViewScroll)
 	bscript.AddBuiltin("print", print)
 	bscript.AddBuiltin("getDir", getDir)
+	bscript.AddBuiltin("getDirScreen", getDirScreen)
 	bscript.AddBuiltin("getDelta", getDelta)
 	bscript.AddBuiltin("isInView", isInView)
 	bscript.AddBuiltin("saveGame", saveGame)
@@ -709,6 +729,7 @@ func InitScript() {
 	bscript.AddBuiltin("didClick", didClick)
 	bscript.AddBuiltin("getClick", getClick)
 	bscript.AddBuiltin("findTop", findTop)
+	bscript.AddBuiltin("setCursor", setCursor)
 	bscript.AddBuiltin("setCursorShape", setCursorShape)
 	bscript.AddBuiltin("clearCursorShape", clearCursorShape)
 	bscript.AddBuiltin("raisePanel", raisePanel)

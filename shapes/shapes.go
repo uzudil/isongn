@@ -61,13 +61,20 @@ type Shape struct {
 	NoSupport      bool
 	IsExtra        bool
 	IsDraggable    bool
+	IsInteractive  bool
 	IsSaved        bool
+}
+
+type CursorDef struct {
+	Name               string
+	HotspotX, HotspotY int
 }
 
 var Shapes []*Shape
 var Names map[string]int = map[string]int{}
 var Images []image.Image
 var UiImages map[string]image.Image = map[string]image.Image{}
+var Cursors []CursorDef
 
 // some pre-defined animations
 const ANIMATION_MOVE = 0
@@ -143,6 +150,12 @@ func appendUiImage(imageDef map[string]interface{}, img image.Image, shapeMeta *
 	name := imageDef["name"].(string)
 	UiImages[name] = uiImage
 	fmt.Printf("\tStored UI Image: %s\n", name)
+
+	if cursor, ok := imageDef["cursor"].([]interface{}); ok {
+		hx := int(cursor[0].(float64))
+		hy := int(cursor[1].(float64))
+		Cursors = append(Cursors, CursorDef{name, hx, hy})
+	}
 }
 
 func appendShape(index int, name string, shapeDef map[string]interface{}, imageIndex int, img image.Image, shapeMeta *ShapeMeta) {
@@ -259,6 +272,10 @@ func (shape *Shape) addExtras(shapeDef map[string]interface{}) {
 	if drag, ok := shapeDef["drag"].(bool); ok {
 		shape.IsDraggable = drag
 	}
+	// drag
+	if interactive, ok := shapeDef["interactive"].(bool); ok {
+		shape.IsInteractive = interactive
+	}
 }
 
 func (shape *Shape) HasEdges(shapeName string) bool {
@@ -351,13 +368,14 @@ func InitCreatures(gameDir string, data []map[string]interface{}) error {
 		size := [3]float32{float32(sizeI[0].(float64)), float32(sizeI[1].(float64)), float32(sizeI[2].(float64))}
 
 		shape := &Shape{
-			Index:      imageIndex * 0x100,
-			Name:       name,
-			Size:       size,
-			ImageIndex: imageIndex,
-			Animations: map[int]*Animation{},
-			AlphaMin:   alphaMinDefault,
-			IsSaved:    false,
+			Index:         imageIndex * 0x100,
+			Name:          name,
+			Size:          size,
+			ImageIndex:    imageIndex,
+			Animations:    map[int]*Animation{},
+			AlphaMin:      alphaMinDefault,
+			IsSaved:       false,
+			IsInteractive: true,
 		}
 		shape.addExtras(block)
 

@@ -1,5 +1,9 @@
 package shapes
 
+import (
+	"math"
+)
+
 type Direction int
 
 var DIR_W = Direction(0)
@@ -22,6 +26,39 @@ var Directions = map[string]Direction{
 	"n":  DIR_N,
 	"nw": DIR_NW,
 	"":   DIR_NONE,
+}
+
+func GetDirScreen(dx, dy float64) Direction {
+	r := math.Atan2(dy, dx)
+	a := r * 180 / math.Pi
+	if a < 0 {
+		a += 360
+	}
+	if a >= 360 {
+		a -= 360
+	}
+	if a >= 30 && a < 60 {
+		return DIR_SE
+	}
+	if a >= 60 && a < 120 {
+		return DIR_S
+	}
+	if a >= 120 && a < 150 {
+		return DIR_SW
+	}
+	if a >= 150 && a < 210 {
+		return DIR_W
+	}
+	if a >= 210 && a < 240 {
+		return DIR_NW
+	}
+	if a >= 240 && a < 300 {
+		return DIR_N
+	}
+	if a >= 300 && a < 330 {
+		return DIR_NE
+	}
+	return DIR_E
 }
 
 func GetDir(dx, dy int) Direction {

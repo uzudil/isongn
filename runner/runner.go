@@ -44,31 +44,34 @@ type NamedPanel struct {
 }
 
 type Runner struct {
-	app                  *gfx.App
-	ctx                  *bscript.Context
-	eventsCall           *bscript.Variable
-	deltaArg             *bscript.Value
-	fadeDirArg           *bscript.Value
-	mouseXArg, mouseYArg *bscript.Value
-	sectionLoadCall      *bscript.Variable
-	hourArg              *bscript.Value
-	hourCall             *bscript.Variable
-	sectionLoadXArg      *bscript.Value
-	sectionLoadYArg      *bscript.Value
-	sectionLoadDataArg   *bscript.Value
-	sectionSaveCall      *bscript.Variable
-	sectionSaveXArg      *bscript.Value
-	sectionSaveYArg      *bscript.Value
-	exitCall             *bscript.Variable
-	messages             map[int]*Message
-	messageIndex         int
-	updateOverlay        bool
-	Calendar             *Calendar
-	positionMessages     []*PositionMessage
-	daylight             [24][3]float32
-	lastHour             int
-	panels               []*NamedPanel
-	panelPos             map[string][2]int
+	app                                            *gfx.App
+	ctx                                            *bscript.Context
+	eventsCall                                     *bscript.Variable
+	deltaArg                                       *bscript.Value
+	fadeDirArg                                     *bscript.Value
+	mouseXArg, mouseYArg                           *bscript.Value
+	mouseWorldXArg, mouseWorldYArg, mouseWorldZArg *bscript.Value
+	mouseButtonDownArg                             *bscript.Value
+	mouseOnInteractiveArg                          *bscript.Value
+	sectionLoadCall                                *bscript.Variable
+	hourArg                                        *bscript.Value
+	hourCall                                       *bscript.Variable
+	sectionLoadXArg                                *bscript.Value
+	sectionLoadYArg                                *bscript.Value
+	sectionLoadDataArg                             *bscript.Value
+	sectionSaveCall                                *bscript.Variable
+	sectionSaveXArg                                *bscript.Value
+	sectionSaveYArg                                *bscript.Value
+	exitCall                                       *bscript.Variable
+	messages                                       map[int]*Message
+	messageIndex                                   int
+	updateOverlay                                  bool
+	Calendar                                       *Calendar
+	positionMessages                               []*PositionMessage
+	daylight                                       [24][3]float32
+	lastHour                                       int
+	panels                                         []*NamedPanel
+	panelPos                                       map[string][2]int
 }
 
 func NewRunner() *Runner {
@@ -141,7 +144,12 @@ func (runner *Runner) Init(app *gfx.App, config map[string]interface{}) {
 	runner.fadeDirArg = &bscript.Value{Number: &bscript.SignedNumber{}}
 	runner.mouseXArg = &bscript.Value{Number: &bscript.SignedNumber{}}
 	runner.mouseYArg = &bscript.Value{Number: &bscript.SignedNumber{}}
-	runner.eventsCall = util.NewFunctionCall("events", runner.deltaArg, runner.fadeDirArg, runner.mouseXArg, runner.mouseYArg)
+	runner.mouseWorldXArg = &bscript.Value{Number: &bscript.SignedNumber{}}
+	runner.mouseWorldYArg = &bscript.Value{Number: &bscript.SignedNumber{}}
+	runner.mouseWorldZArg = &bscript.Value{Number: &bscript.SignedNumber{}}
+	runner.mouseButtonDownArg = &bscript.Value{Number: &bscript.SignedNumber{}}
+	runner.mouseOnInteractiveArg = &bscript.Value{Number: &bscript.SignedNumber{}}
+	runner.eventsCall = util.NewFunctionCall("events", runner.deltaArg, runner.fadeDirArg, runner.mouseXArg, runner.mouseYArg, runner.mouseWorldXArg, runner.mouseWorldYArg, runner.mouseWorldZArg, runner.mouseButtonDownArg, runner.mouseOnInteractiveArg)
 
 	runner.hourArg = &bscript.Value{Number: &bscript.SignedNumber{}}
 	runner.hourCall = util.NewFunctionCall("onHour", runner.hourArg)
@@ -168,13 +176,22 @@ func (runner *Runner) Name() string {
 	return "runner"
 }
 
-func (runner *Runner) Events(delta float64, fadeDir int, mouseX, mouseY int32) {
+func (runner *Runner) Events(delta float64, fadeDir int, mouseX, mouseY, mouseWorldX, mouseWorldY, mouseWorldZ, mouseButtonDown int32, mouseOnInteractive bool) {
 	runner.Calendar.Incr(delta)
 	runner.timeoutMessages(delta)
 	runner.deltaArg.Number.Number = delta
 	runner.fadeDirArg.Number.Number = float64(fadeDir)
 	runner.mouseXArg.Number.Number = float64(mouseX)
 	runner.mouseYArg.Number.Number = float64(mouseY)
+	runner.mouseWorldXArg.Number.Number = float64(mouseWorldX)
+	runner.mouseWorldYArg.Number.Number = float64(mouseWorldY)
+	runner.mouseWorldZArg.Number.Number = float64(mouseWorldZ)
+	runner.mouseButtonDownArg.Number.Number = float64(mouseButtonDown)
+	n := 0.0
+	if mouseOnInteractive {
+		n = 1.0
+	}
+	runner.mouseOnInteractiveArg.Number.Number = n
 	runner.eventsCall.Evaluate(runner.ctx)
 }
 

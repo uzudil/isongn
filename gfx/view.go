@@ -244,6 +244,13 @@ func (view *View) search(viewX, viewY, viewZ int, fx func(*BlockPos) bool) {
 	}
 }
 
+func (view *View) getShapeExact(viewX, viewY, viewZ int) *BlockPos {
+	if view.isValidViewPos(viewX, viewY, viewZ) {
+		return view.blockPos[viewX][viewY][viewZ]
+	}
+	return nil
+}
+
 func (view *View) getShapeAt(viewX, viewY, viewZ int) *BlockPos {
 	var res *BlockPos
 	view.search(viewX, viewY, viewZ, func(bp *BlockPos) bool {
